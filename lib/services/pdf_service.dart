@@ -241,22 +241,22 @@ class PdfService {
         footer: (context) => _buildFooter(context, report),
         build: (context) => [
           _buildCompanyAndClientInfo(report),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 6),
           _buildFindingsAndPests(report),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 6),
           _buildChemicalsTable(report.chemicals),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 6),
 
           // Sección de Trampas condicional
           if (report.hasTraps && report.traps.isNotEmpty) ...[
-            _buildTrapsMonitoringTable(report.traps),
-            pw.SizedBox(height: 8),
+            ..._buildTrapsMonitoringTable(context, report.traps),
+            pw.SizedBox(height: 6),
           ],
 
           // Galería calibrada para 8 fotos por hoja (2 x 4)
           if (loadedEvidences.isNotEmpty) ...[
             _buildEvidenceGallery(loadedEvidences),
-            pw.SizedBox(height: 8),
+            pw.SizedBox(height: 6),
           ],
 
           // Bloque unificado de recomendaciones y firmas transparentes
@@ -580,45 +580,44 @@ class PdfService {
     );
   }
 
-  static pw.Widget _buildTrapsMonitoringTable(List<TrapMonitoring> traps) {
-    return pw.Column(
-      children: [
-        _buildSectionHeader('Inspección de Roedores: Cebaderos y Trampas Mecánicas'),
-        pw.SizedBox(height: 4),
-        pw.TableHelper.fromTextArray(
-          border: pw.TableBorder.all(color: borderColor, width: 0.5),
-          headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-          headerDecoration: const pw.BoxDecoration(color: accentColor),
-          cellStyle: const pw.TextStyle(fontSize: 7),
-          cellHeight: 15,
-          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(1.0),
-            1: const pw.FlexColumnWidth(2.3),
-            2: const pw.FlexColumnWidth(2.1),
-            3: const pw.FlexColumnWidth(2.3),
-            4: const pw.FlexColumnWidth(1.1),
-            5: const pw.FlexColumnWidth(2.6),
-          },
-          headers: ['ID', 'Ubicación', 'Dispositivo', 'Consumo / Estado', 'Capturas', 'Observaciones'],
-          data: traps.map((t) {
-            final isBait = t.trapType.toLowerCase().contains('cebado');
-            final statusDisplay = isBait
-                ? '${t.consumptionPercentage}% Cebo (${t.status})'
-                : t.status;
+  static List<pw.Widget> _buildTrapsMonitoringTable(pw.Context context, List<TrapMonitoring> traps) {
+    return [
+      _buildSectionHeader('Inspección de Roedores: Cebaderos y Trampas Mecánicas'),
+      pw.SizedBox(height: 3),
+      pw.TableHelper.fromTextArray(
+        context: context,
+        border: pw.TableBorder.all(color: borderColor, width: 0.5),
+        headerStyle: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+        headerDecoration: const pw.BoxDecoration(color: accentColor),
+        cellStyle: const pw.TextStyle(fontSize: 7),
+        cellHeight: 14,
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(1.0),
+          1: const pw.FlexColumnWidth(2.3),
+          2: const pw.FlexColumnWidth(2.1),
+          3: const pw.FlexColumnWidth(2.3),
+          4: const pw.FlexColumnWidth(1.1),
+          5: const pw.FlexColumnWidth(2.6),
+        },
+        headers: ['ID', 'Ubicación', 'Dispositivo', 'Consumo / Estado', 'Capturas', 'Observaciones'],
+        data: traps.map((t) {
+          final isBait = t.trapType.toLowerCase().contains('cebado');
+          final statusDisplay = isBait
+              ? '${t.consumptionPercentage}% Cebo (${t.status})'
+              : t.status;
 
-            return [
-              t.id,
-              t.location,
-              t.trapType,
-              statusDisplay,
-              t.captureCount > 0 ? t.captureCount.toString() : '-',
-              t.observations.isNotEmpty ? t.observations : 'Sin novedades',
-            ];
-          }).toList(),
-        ),
-      ],
-    );
+          return [
+            t.id,
+            t.location,
+            t.trapType,
+            statusDisplay,
+            t.captureCount > 0 ? t.captureCount.toString() : '-',
+            t.observations.isNotEmpty ? t.observations : 'Sin novedades',
+          ];
+        }).toList(),
+      ),
+    ];
   }
 
   static pw.Widget _buildEvidenceGallery(List<_PreparedEvidence> evidences) {
