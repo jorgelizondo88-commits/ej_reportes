@@ -1,0 +1,41 @@
+name: ej_reportes
+description: "Sistema para Reportes de Control de Plagas"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  pdf: ^3.13.1
+  printing: ^5.15.1
+  image_picker: ^1.2.3
+  flutter_image_compress: ^2.5.1
+  path_provider: ^2.1.6
+  share_plus: ^13.3.0
+  intl: ^0.20.3
+  signature: ^6.4.0
+  shared_preferences: ^2.5.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
