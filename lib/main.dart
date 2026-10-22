@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
-import 'ui/home_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'ui/hub/main_hub_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await initializeDateFormatting('es_MX', null);
+  } catch (_) {}
   runApp(const EJReportesApp());
 }
 
@@ -12,7 +16,7 @@ class EJReportesApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'EJ Reportes',
+      title: 'EJ Exterminadores',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -32,7 +36,7 @@ class EJReportesApp extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
-      home: const HomeScreen(),
+      home: const MainHubScreen(),
     );
   }
 }
