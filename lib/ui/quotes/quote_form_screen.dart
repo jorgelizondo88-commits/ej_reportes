@@ -360,7 +360,11 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                       flex: 3,
                       child: DropdownButtonFormField<String>(
                         value: unit,
-                        decoration: const InputDecoration(labelText: 'Unidad'),
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Unidad',
+                          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                        ),
                         items: ['Servicio', 'Póliza', 'Mes', 'Pza', 'Visita', 'Lote']
                             .map((u) => DropdownMenuItem(value: u, child: Text(u)))
                             .toList(),
@@ -547,7 +551,6 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                     Row(
                       children: [
                         Expanded(
-                          flex: 3,
                           child: TextField(
                             controller: _folioController,
                             decoration: const InputDecoration(labelText: 'Folio'),
@@ -556,7 +559,6 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          flex: 3,
                           child: InkWell(
                             onTap: () async {
                               final picked = await showDatePicker(
@@ -576,26 +578,27 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: DropdownButtonFormField<int>(
-                            value: _validDays,
-                            decoration: const InputDecoration(labelText: 'Vigencia'),
-                            items: const [
-                              DropdownMenuItem(value: 7, child: Text('7 d')),
-                              DropdownMenuItem(value: 15, child: Text('15 d')),
-                              DropdownMenuItem(value: 30, child: Text('30 d')),
-                              DropdownMenuItem(value: 60, child: Text('60 d')),
-                            ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                _onValidDaysChanged(val);
-                              }
-                            },
-                          ),
-                        ),
                       ],
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<int>(
+                      value: _validDays,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Vigencia de la Cotización',
+                        prefixIcon: Icon(Icons.timer_outlined, size: 20),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 7, child: Text('7 días naturales')),
+                        DropdownMenuItem(value: 15, child: Text('15 días naturales (Estándar)')),
+                        DropdownMenuItem(value: 30, child: Text('30 días naturales')),
+                        DropdownMenuItem(value: 60, child: Text('60 días naturales')),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) {
+                          _onValidDaysChanged(val);
+                        }
+                      },
                     ),
                   ],
                 ),
