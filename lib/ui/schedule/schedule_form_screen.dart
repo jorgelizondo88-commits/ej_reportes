@@ -673,11 +673,16 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    children: const [
-                      Icon(Icons.repeat, color: Color(0xFF0F2B48), size: 22),
-                      SizedBox(width: 8),
-                      Text('Regla de Periodicidad del Servicio',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48))),
+                    children: [
+                      const Icon(Icons.repeat, color: Color(0xFF0F2B48), size: 22),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Regla de Periodicidad del Servicio',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -687,13 +692,19 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                     children: [
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text('Día Relativo (Ej. 1er Domingo)'),
+                          label: Center(
+                            child: Text(
+                              'Día Relativo (1er Dom)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _recurrenceMode == 'relative' ? Colors.white : Colors.black87,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                           selected: _recurrenceMode == 'relative',
                           selectedColor: const Color(0xFF0F2B48),
-                          labelStyle: TextStyle(
-                            color: _recurrenceMode == 'relative' ? Colors.white : Colors.black87,
-                            fontSize: 12,
-                          ),
                           onSelected: (val) {
                             if (val) {
                               setState(() => _recurrenceMode = 'relative');
@@ -705,13 +716,19 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: ChoiceChip(
-                          label: const Text('Día Fijo (Ej. Día 15)'),
+                          label: Center(
+                            child: Text(
+                              'Día Fijo (Ej. Día 15)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _recurrenceMode == 'fixed_day' ? Colors.white : Colors.black87,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                           selected: _recurrenceMode == 'fixed_day',
                           selectedColor: const Color(0xFF0F2B48),
-                          labelStyle: TextStyle(
-                            color: _recurrenceMode == 'fixed_day' ? Colors.white : Colors.black87,
-                            fontSize: 12,
-                          ),
                           onSelected: (val) {
                             if (val) {
                               setState(() => _recurrenceMode = 'fixed_day');
@@ -874,16 +891,21 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Visitas Programadas (${_visits.length})',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48))),
-                          const SizedBox(height: 2),
-                          const Text('Toca cualquier visita para cambiar su fecha u hora',
-                              style: TextStyle(fontSize: 11, color: Colors.grey)),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Visitas Programadas (${_visits.length})',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48))),
+                            const SizedBox(height: 2),
+                            const Text('Toca para cambiar fecha u hora',
+                                style: TextStyle(fontSize: 11, color: Colors.grey),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F2B48),
@@ -921,7 +943,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                       final isRealizada = v.status == 'Realizada';
 
                       return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                         leading: CircleAvatar(
                           radius: 16,
                           backgroundColor: isRealizada ? Colors.green.shade100 : const Color(0xFF0F2B48).withValues(alpha: 0.1),
@@ -938,14 +960,14 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                           fullDateFormat.format(v.date),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                            fontSize: 12.5,
                             color: isRealizada ? Colors.green.shade900 : Colors.black87,
                             decoration: isRealizada ? TextDecoration.lineThrough : null,
                           ),
                         ),
                         subtitle: Text(
                           '${v.time} • ${v.serviceType}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -953,16 +975,27 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                             IconButton(
                               icon: const Icon(Icons.calendar_today, size: 18, color: Color(0xFF0F2B48)),
                               tooltip: 'Cambiar Fecha de esta Visita',
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
                               onPressed: () => _editSpecificVisitDate(v),
                             ),
+                            const SizedBox(width: 4),
                             IconButton(
                               icon: const Icon(Icons.access_time, size: 18, color: Color(0xFF0F2B48)),
                               tooltip: 'Cambiar Horario',
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
                               onPressed: () => _editSpecificVisitTime(v),
                             ),
+                            const SizedBox(width: 4),
                             IconButton(
                               icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
                               tooltip: 'Eliminar esta visita',
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
                               onPressed: () {
                                 setState(() => _visits.removeAt(idx));
                                 _saveDraft();
