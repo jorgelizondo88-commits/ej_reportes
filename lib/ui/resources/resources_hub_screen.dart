@@ -69,11 +69,9 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
       final file = File('${tempDir.path}/Ficha_Tecnica_$cleanName.pdf');
       await file.writeAsBytes(pdfBytes);
 
-      await SharePlus.instance.share(
-        ShareRequest(
-          files: [XFile(file.path)],
-          text: 'Ficha Técnica EJ Exterminadores: ${pest.name}',
-        ),
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Ficha Técnica EJ Exterminadores: ${pest.name}',
       );
     } catch (e) {
       if (mounted) {
@@ -92,11 +90,9 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
       final file = File('${tempDir.path}/Comunicado_$cleanName.pdf');
       await file.writeAsBytes(pdfBytes);
 
-      await SharePlus.instance.share(
-        ShareRequest(
-          files: [XFile(file.path)],
-          text: 'Comunicado Oficial EJ Exterminadores: ${notice.title}',
-        ),
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Comunicado Oficial EJ Exterminadores: ${notice.title}',
       );
     } catch (e) {
       if (mounted) {

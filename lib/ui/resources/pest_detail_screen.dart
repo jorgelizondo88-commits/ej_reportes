@@ -19,11 +19,9 @@ class PestDetailScreen extends StatelessWidget {
       final file = File('${tempDir.path}/Ficha_Tecnica_$cleanName.pdf');
       await file.writeAsBytes(pdfBytes);
 
-      await SharePlus.instance.share(
-        ShareRequest(
-          files: [XFile(file.path)],
-          text: 'Ficha Técnica EJ Exterminadores: ${pest.name}',
-        ),
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Ficha Técnica EJ Exterminadores: ${pest.name}',
       );
     } catch (e) {
       if (context.mounted) {

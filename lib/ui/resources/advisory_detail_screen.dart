@@ -19,11 +19,9 @@ class AdvisoryDetailScreen extends StatelessWidget {
       final file = File('${tempDir.path}/Comunicado_$cleanName.pdf');
       await file.writeAsBytes(pdfBytes);
 
-      await SharePlus.instance.share(
-        ShareRequest(
-          files: [XFile(file.path)],
-          text: 'Comunicado Oficial EJ Exterminadores: ${notice.title}',
-        ),
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Comunicado Oficial EJ Exterminadores: ${notice.title}',
       );
     } catch (e) {
       if (context.mounted) {
