@@ -10,6 +10,7 @@ import '../quotes/quote_form_screen.dart';
 import '../quotes/quote_history_screen.dart';
 import '../schedule/schedule_form_screen.dart';
 import '../schedule/schedule_history_screen.dart';
+import '../resources/resources_hub_screen.dart';
 
 class MainHubScreen extends StatefulWidget {
   const MainHubScreen({super.key});
@@ -252,6 +253,26 @@ class _MainHubScreenState extends State<MainHubScreen> {
                     MaterialPageRoute(builder: (context) => const ClientsDirectoryScreen()),
                   );
                   _loadMetrics();
+                },
+                secondaryButtonText: null,
+                onSecondaryPressed: null,
+              ),
+              const SizedBox(height: 14),
+
+              // 5. Tarjeta BIBLIOTECA DE PLAGAS Y COMUNICADOS
+              _moduleCard(
+                icon: Icons.menu_book_outlined,
+                iconColor: Colors.deepPurple.shade700,
+                badgeText: 'Fichas y PDFs',
+                badgeColor: Colors.deepPurple,
+                title: 'Biblioteca de Plagas y Comunicados',
+                subtitle: 'Fichas técnicas de plagas (alacranes, roedores, etc.) y avisos oficiales para clientes (buenas prácticas en oficinas, cocinas y pre/post servicio).',
+                primaryButtonText: 'Abrir Biblioteca y Avisos',
+                onPrimaryPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ResourcesHubScreen()),
+                  );
                 },
                 secondaryButtonText: null,
                 onSecondaryPressed: null,
