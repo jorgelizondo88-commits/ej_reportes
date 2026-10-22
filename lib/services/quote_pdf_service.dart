@@ -549,16 +549,22 @@ class QuotePdfService {
     );
   }
 
-  // --- CONDICIONES COMERCIALES ---
+  // --- CONDICIONES COMERCIALES Y TÉRMINOS ---
   static pw.Widget _buildTermsAndConditions(QuoteModel quote) {
+    final rawLines = quote.termsAndConditions
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader('Condiciones Comerciales y Garantía'),
+        _buildSectionHeader('Términos y Condiciones del Servicio'),
         pw.SizedBox(height: 3),
         pw.Container(
           width: double.infinity,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           decoration: pw.BoxDecoration(
             border: pw.Border.all(color: borderColor, width: 0.5),
             borderRadius: pw.BorderRadius.circular(4),
@@ -567,54 +573,61 @@ class QuotePdfService {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              if (quote.paymentTerms.isNotEmpty) ...[
-                pw.RichText(
-                  softWrap: true,
-                  text: pw.TextSpan(
-                    children: [
-                      pw.TextSpan(
-                        text: 'Forma y Condiciones de Pago: ',
-                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: darkText),
-                      ),
-                      pw.TextSpan(
-                        text: quote.paymentTerms,
-                        style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
-                      ),
-                    ],
+              ...rawLines.map((line) {
+                final match = RegExp(r'^(\d+\.)\s*(.*)$').firstMatch(line);
+                if (match != null) {
+                  final number = match.group(1)!;
+                  final content = match.group(2)!;
+                  return pw.Padding(
+                    padding: const pw.EdgeInsets.only(bottom: 2.2),
+                    child: pw.Row(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.SizedBox(
+                          width: 13,
+                          child: pw.Text(
+                            number,
+                            style: pw.TextStyle(
+                              fontSize: 7.0,
+                              fontWeight: pw.FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ),
+                        pw.Expanded(
+                          child: pw.Text(
+                            content,
+                            style: const pw.TextStyle(fontSize: 7.0, color: darkText),
+                            softWrap: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 2.2),
+                  child: pw.Text(
+                    line,
+                    style: const pw.TextStyle(fontSize: 7.0, color: darkText),
+                    softWrap: true,
                   ),
-                ),
-                pw.SizedBox(height: 3),
-              ],
-              if (quote.warranty.isNotEmpty) ...[
-                pw.RichText(
-                  softWrap: true,
-                  text: pw.TextSpan(
-                    children: [
-                      pw.TextSpan(
-                        text: 'Garantía del Servicio: ',
-                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: darkText),
-                      ),
-                      pw.TextSpan(
-                        text: quote.warranty,
-                        style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
-                      ),
-                    ],
-                  ),
-                ),
-                pw.SizedBox(height: 3),
-              ],
+                );
+              }),
               if (quote.notes.isNotEmpty) ...[
+                pw.SizedBox(height: 3),
                 pw.RichText(
                   softWrap: true,
                   text: pw.TextSpan(
                     children: [
                       pw.TextSpan(
-                        text: 'Notas y Observaciones: ',
-                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: darkText),
+                        text: 'Notas adicionales: ',
+                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: darkText),
                       ),
                       pw.TextSpan(
                         text: quote.notes,
-                        style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
+                        style: const pw.TextStyle(fontSize: 7.0, color: PdfColors.grey800),
                       ),
                     ],
                   ),

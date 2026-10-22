@@ -55,8 +55,7 @@ class QuoteModel {
   final List<QuoteItem> items;
   final bool applyIva;
   final double ivaRate;
-  final String paymentTerms;
-  final String warranty;
+  final String termsAndConditions;
   final String notes;
   final String elaboratedBy;
 
@@ -75,11 +74,21 @@ class QuoteModel {
     required this.items,
     this.applyIva = false,
     this.ivaRate = 0.16,
-    this.paymentTerms = '50% de anticipo y 50% al finalizar el servicio.',
-    this.warranty = '30 días de garantía en el servicio aplicado.',
-    this.notes = 'Precios expresados en moneda nacional (MXN).',
+    String? termsAndConditions,
+    this.notes = '',
     this.elaboratedBy = 'EJ Exterminadores',
-  });
+  }) : termsAndConditions = termsAndConditions ?? defaultTermsAndConditions(validDays);
+
+  static String defaultTermsAndConditions(int days) {
+    return '1. Esta cotización tiene una validez de $days días naturales a partir de la fecha de emisión.\n'
+        '2. El servicio tiene una garantía de 30 días.\n'
+        '3. Todos los precios son mas I.V.A.\n'
+        '4. Pago de contado en una sola exhibición al término de cada servicio.\n'
+        '5. El servicio incluye un (1) tratamiento mensual, en los días y horario requeridos por el cliente y visitas de inspección y supervisión de servicio.\n'
+        '6. Al concluir cada servicio se expide un Certificado de control de plagas avalado por la secretaria de salud (S.S.A.) y la orden de trabajo correspondiente.\n'
+        '7. El cliente debe otorgar las facilidades de acceso, estacionamiento, tiempo y espacio a fin de realizar las labores correspondientes al servicio con la mayor brevedad y eficiencia posible.\n'
+        '8. Cualquier servicio, producto, dispositivo o situación no contemplada en la presente cotización, deberá ser cotizada de manera independiente y puede tener un costo adicional.';
+  }
 
   DateTime get validUntilDate => quoteDate.add(Duration(days: validDays));
 
@@ -105,8 +114,7 @@ class QuoteModel {
       'items': items.map((i) => i.toMap()).toList(),
       'applyIva': applyIva,
       'ivaRate': ivaRate,
-      'paymentTerms': paymentTerms,
-      'warranty': warranty,
+      'termsAndConditions': termsAndConditions,
       'notes': notes,
       'elaboratedBy': elaboratedBy,
       'subtotal': subtotal,
@@ -116,11 +124,12 @@ class QuoteModel {
   }
 
   factory QuoteModel.fromMap(Map<String, dynamic> map) {
+    final days = map['validDays'] ?? 15;
     return QuoteModel(
       id: map['id'] ?? '',
       quoteFolio: map['quoteFolio'] ?? '',
       quoteDate: DateTime.tryParse(map['quoteDate'] ?? '') ?? DateTime.now(),
-      validDays: map['validDays'] ?? 15,
+      validDays: days,
       clientBusinessName: map['clientBusinessName'] ?? '',
       clientContactName: map['clientContactName'] ?? '',
       clientAddress: map['clientAddress'] ?? '',
@@ -133,9 +142,8 @@ class QuoteModel {
           .toList(),
       applyIva: map['applyIva'] ?? false,
       ivaRate: (map['ivaRate'] as num?)?.toDouble() ?? 0.16,
-      paymentTerms: map['paymentTerms'] ?? '50% de anticipo y 50% al finalizar el servicio.',
-      warranty: map['warranty'] ?? '30 días de garantía en el servicio aplicado.',
-      notes: map['notes'] ?? 'Precios expresados en moneda nacional (MXN).',
+      termsAndConditions: map['termsAndConditions'] ?? defaultTermsAndConditions(days),
+      notes: map['notes'] ?? '',
       elaboratedBy: map['elaboratedBy'] ?? 'EJ Exterminadores',
     );
   }

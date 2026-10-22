@@ -31,8 +31,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
   late TextEditingController _addressController;
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
-  late TextEditingController _paymentTermsController;
-  late TextEditingController _warrantyController;
+  late TextEditingController _termsController;
   late TextEditingController _notesController;
   late TextEditingController _repController;
 
@@ -83,9 +82,8 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
     _addressController = TextEditingController();
     _phoneController = TextEditingController();
     _emailController = TextEditingController();
-    _paymentTermsController = TextEditingController(text: '50% de anticipo al confirmar y 50% al finalizar el servicio.');
-    _warrantyController = TextEditingController(text: '30 días de garantía en el servicio aplicado.');
-    _notesController = TextEditingController(text: 'Precios en moneda nacional (MXN). No incluye trabajos de albañilería.');
+    _termsController = TextEditingController(text: QuoteModel.defaultTermsAndConditions(_validDays));
+    _notesController = TextEditingController();
     _repController = TextEditingController(text: 'EJ Exterminadores');
   }
 
@@ -97,8 +95,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
     _addressController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _paymentTermsController.dispose();
-    _warrantyController.dispose();
+    _termsController.dispose();
     _notesController.dispose();
     _repController.dispose();
     super.dispose();
@@ -145,8 +142,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
         _phoneController.text = map['clientPhone'] ?? '';
         _emailController.text = map['clientEmail'] ?? '';
         _facilityType = map['facilityType'] ?? 'Comercial / Restaurante';
-        _paymentTermsController.text = map['paymentTerms'] ?? _paymentTermsController.text;
-        _warrantyController.text = map['warranty'] ?? _warrantyController.text;
+        _termsController.text = map['termsAndConditions'] ?? QuoteModel.defaultTermsAndConditions(_validDays);
         _notesController.text = map['notes'] ?? _notesController.text;
         _repController.text = map['elaboratedBy'] ?? _repController.text;
         _applyIva = map['applyIva'] ?? false;
@@ -166,6 +162,24 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
     } catch (_) {}
   }
 
+  void _onValidDaysChanged(int newDays) {
+    setState(() {
+      _validDays = newDays;
+      final currentText = _termsController.text;
+      if (currentText.isEmpty) {
+        _termsController.text = QuoteModel.defaultTermsAndConditions(newDays);
+      } else {
+        // Corrige automáticamente los días en la cláusula 1
+        final updated = currentText.replaceAll(
+          RegExp(r'validez de \d+ días naturales', caseSensitive: false),
+          'validez de $newDays días naturales',
+        );
+        _termsController.text = updated;
+      }
+    });
+    _saveDraft();
+  }
+
   Future<void> _saveDraft() async {
     final prefs = await SharedPreferences.getInstance();
     final draftMap = {
@@ -179,8 +193,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
       'clientEmail': _emailController.text,
       'facilityType': _facilityType,
       'targetedPests': _targetedPests,
-      'paymentTerms': _paymentTermsController.text,
-      'warranty': _warrantyController.text,
+      'termsAndConditions': _termsController.text,
       'notes': _notesController.text,
       'elaboratedBy': _repController.text,
       'applyIva': _applyIva,
@@ -245,6 +258,8 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
         _targetedPests.clear();
         _quoteDate = DateTime.now();
         _validDays = 15;
+        _termsController.text = QuoteModel.defaultTermsAndConditions(15);
+        _notesController.clear();
         _applyIva = false;
       });
     }
@@ -467,8 +482,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
       targetedPests: _targetedPests,
       items: _items,
       applyIva: _applyIva,
-      paymentTerms: _paymentTermsController.text.trim(),
-      warranty: _warrantyController.text.trim(),
+      termsAndConditions: _termsController.text.trim(),
       notes: _notesController.text.trim(),
       elaboratedBy: _repController.text.trim(),
     );
@@ -576,8 +590,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                             ],
                             onChanged: (val) {
                               if (val != null) {
-                                setState(() => _validDays = val);
-                                _saveDraft();
+                                _onValidDaysChanged(val);
                               }
                             },
                           ),
@@ -883,7 +896,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
             ),
             const SizedBox(height: 14),
 
-            // Condiciones y Garantías
+            // Términos y Condiciones
             Card(
               elevation: 1,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -892,24 +905,45 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Condiciones Comerciales', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48))),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _paymentTermsController,
-                      decoration: const InputDecoration(labelText: 'Forma y Condiciones de Pago'),
-                      onChanged: (_) => _saveDraft(),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Términos y Condiciones',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48)),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.restart_alt, size: 16),
+                          label: const Text('Restaurar', style: TextStyle(fontSize: 12)),
+                          onPressed: () {
+                            setState(() {
+                              _termsController.text = QuoteModel.defaultTermsAndConditions(_validDays);
+                            });
+                            _saveDraft();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'La cláusula #1 se actualiza automáticamente según la vigencia seleccionada ($_validDays días).',
+                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontStyle: FontStyle.italic),
                     ),
                     const SizedBox(height: 10),
                     TextField(
-                      controller: _warrantyController,
-                      decoration: const InputDecoration(labelText: 'Garantía del Servicio'),
+                      controller: _termsController,
+                      maxLines: 9,
+                      style: const TextStyle(fontSize: 12.5, height: 1.35),
+                      decoration: const InputDecoration(
+                        hintText: 'Términos y condiciones de la cotización...',
+                      ),
                       onChanged: (_) => _saveDraft(),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     TextField(
                       controller: _notesController,
                       maxLines: 2,
-                      decoration: const InputDecoration(labelText: 'Notas / Observaciones'),
+                      decoration: const InputDecoration(labelText: 'Notas adicionales (Opcional)'),
                       onChanged: (_) => _saveDraft(),
                     ),
                     const SizedBox(height: 10),
