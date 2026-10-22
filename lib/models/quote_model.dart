@@ -58,6 +58,8 @@ class QuoteModel {
   final String termsAndConditions;
   final String notes;
   final String elaboratedBy;
+  final bool includeSignature;
+  final String? signatureBase64;
 
   QuoteModel({
     required this.id,
@@ -77,6 +79,8 @@ class QuoteModel {
     String? termsAndConditions,
     this.notes = '',
     this.elaboratedBy = 'EJ Exterminadores',
+    this.includeSignature = true,
+    this.signatureBase64,
   }) : termsAndConditions = termsAndConditions ?? defaultTermsAndConditions(validDays);
 
   static String defaultTermsAndConditions(int days) {
@@ -117,6 +121,8 @@ class QuoteModel {
       'termsAndConditions': termsAndConditions,
       'notes': notes,
       'elaboratedBy': elaboratedBy,
+      'includeSignature': includeSignature,
+      'signatureBase64': signatureBase64,
       'subtotal': subtotal,
       'ivaAmount': ivaAmount,
       'totalAmount': totalAmount,
@@ -145,6 +151,8 @@ class QuoteModel {
       termsAndConditions: map['termsAndConditions'] ?? defaultTermsAndConditions(days),
       notes: map['notes'] ?? '',
       elaboratedBy: map['elaboratedBy'] ?? 'EJ Exterminadores',
+      includeSignature: map['includeSignature'] ?? true,
+      signatureBase64: map['signatureBase64'],
     );
   }
 }

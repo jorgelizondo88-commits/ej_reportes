@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/quote_model.dart';
 
 class QuotePdfService {
@@ -80,6 +82,92 @@ class QuotePdfService {
     }
   }
 
+  /// Elimina el fondo blanco de la firma (la hace transparente) y recorta
+  /// el espacio vacío para que el trazo llene el área en el PDF sin deformarse.
+  static Future<Uint8List> _processSignature(Uint8List rawBytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(rawBytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final width = image.width;
+      final height = image.height;
+
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (byteData == null) return rawBytes;
+
+      final Uint8List pixels = Uint8List.fromList(byteData.buffer.asUint8List());
+
+      int minX = width;
+      int maxX = 0;
+      int minY = height;
+      int maxY = 0;
+      bool hasInk = false;
+
+      for (int y = 0; y < height; y++) {
+        final rowOffset = y * width * 4;
+        for (int x = 0; x < width; x++) {
+          final idx = rowOffset + (x * 4);
+          final r = pixels[idx];
+          final g = pixels[idx + 1];
+          final b = pixels[idx + 2];
+          final a = pixels[idx + 3];
+
+          // Blanco, gris claro o semitransparente = Fondo
+          final isWhiteOrLight = r > 195 && g > 195 && b > 195;
+          final isTransparent = a < 30;
+
+          if (isWhiteOrLight || isTransparent) {
+            pixels[idx + 3] = 0; // 100% transparente
+          } else {
+            // Tinta de la firma detectada
+            hasInk = true;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (!hasInk || minX >= maxX || minY >= maxY) {
+        return rawBytes;
+      }
+
+      // Margen de seguridad de 8 píxeles alrededor de la firma
+      minX = (minX - 8).clamp(0, width - 1);
+      minY = (minY - 8).clamp(0, height - 1);
+      maxX = (maxX + 8).clamp(0, width - 1);
+      maxY = (maxY + 8).clamp(0, height - 1);
+
+      final cropWidth = maxX - minX + 1;
+      final cropHeight = maxY - minY + 1;
+
+      final completer = Completer<ui.Image>();
+      ui.decodeImageFromPixels(
+        pixels,
+        width,
+        height,
+        ui.PixelFormat.rgba8888,
+        completer.complete,
+      );
+      final transparentImage = await completer.future;
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      final srcRect = ui.Rect.fromLTWH(minX.toDouble(), minY.toDouble(), cropWidth.toDouble(), cropHeight.toDouble());
+      final dstRect = ui.Rect.fromLTWH(0, 0, cropWidth.toDouble(), cropHeight.toDouble());
+
+      canvas.drawImageRect(transparentImage, srcRect, dstRect, ui.Paint());
+      final picture = recorder.endRecording();
+      final croppedImage = await picture.toImage(cropWidth, cropHeight);
+
+      final pngBytes = await croppedImage.toByteData(format: ui.ImageByteFormat.png);
+      return pngBytes?.buffer.asUint8List() ?? rawBytes;
+    } catch (_) {
+      return rawBytes;
+    }
+  }
+
   /// Método principal que compila y retorna los bytes del PDF de Cotización
   static Future<Uint8List> generateQuotePdf(QuoteModel quote) async {
     final pdf = pw.Document();
@@ -95,7 +183,32 @@ class QuotePdfService {
       logoImage = null;
     }
 
-    // 2. Tema de página con marca de agua centrada
+    // 2. Carga y procesamiento de la firma del prestador
+    Uint8List? processedSignature;
+    if (quote.includeSignature) {
+      Uint8List? rawSigBytes;
+      if (quote.signatureBase64 != null && quote.signatureBase64!.isNotEmpty) {
+        try {
+          rawSigBytes = base64Decode(quote.signatureBase64!);
+        } catch (_) {}
+      }
+      // Si no viene embebida en el modelo, cargar automáticamente la firma fija registrada en reportes
+      if (rawSigBytes == null) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final savedSignBase64 = prefs.getString('ej_saved_tech_sign');
+          if (savedSignBase64 != null && savedSignBase64.isNotEmpty) {
+            rawSigBytes = base64Decode(savedSignBase64);
+          }
+        } catch (_) {}
+      }
+
+      if (rawSigBytes != null) {
+        processedSignature = await _processSignature(rawSigBytes);
+      }
+    }
+
+    // 3. Tema de página con marca de agua centrada
     final pageTheme = pw.PageTheme(
       pageFormat: PdfPageFormat.letter,
       margin: const pw.EdgeInsets.symmetric(horizontal: 32, vertical: 24),
@@ -121,7 +234,7 @@ class QuotePdfService {
       },
     );
 
-    // 3. Estructura de contenido multipágina
+    // 4. Estructura de contenido multipágina
     pdf.addPage(
       pw.MultiPage(
         pageTheme: pageTheme,
@@ -145,7 +258,7 @@ class QuotePdfService {
           _buildTermsAndConditions(quote),
           pw.SizedBox(height: 16),
 
-          _buildSignaturesBlock(quote),
+          _buildSignaturesBlock(quote, processedSignature),
         ],
       ),
     );
@@ -641,24 +754,31 @@ class QuotePdfService {
   }
 
   // --- BLOQUE DE FIRMAS ---
-  static pw.Widget _buildSignaturesBlock(QuoteModel quote) {
+  static pw.Widget _buildSignaturesBlock(QuoteModel quote, Uint8List? repSignature) {
     final repName = quote.elaboratedBy.isNotEmpty ? quote.elaboratedBy : 'EJ Exterminadores';
     final clientName = quote.clientContactName.isNotEmpty ? quote.clientContactName : quote.clientBusinessName;
 
     return pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
-        // Firma del Prestador
+        // Firma del Prestador (Asesor / Técnico)
         pw.Expanded(
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
               pw.Container(
-                height: 48,
+                height: 54,
                 width: 200,
+                alignment: pw.Alignment.bottomCenter,
                 decoration: const pw.BoxDecoration(
-                  border: pw.Border(bottom: pw.BorderSide(color: darkText, width: 1)),
+                  border: pw.Border(bottom: pw.BorderSide(color: darkText, width: 1.2)),
                 ),
+                child: repSignature != null
+                    ? pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 2),
+                        child: pw.Image(pw.MemoryImage(repSignature), fit: pw.BoxFit.contain),
+                      )
+                    : pw.SizedBox(height: 54),
               ),
               pw.SizedBox(height: 4),
               pw.Text(
@@ -667,7 +787,7 @@ class QuotePdfService {
                 textAlign: pw.TextAlign.center,
               ),
               pw.Text(
-                'EJ Exterminadores - Asesor Comercial',
+                'EJ Exterminadores - Representante Comercial',
                 style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
                 textAlign: pw.TextAlign.center,
               ),
@@ -675,16 +795,16 @@ class QuotePdfService {
           ),
         ),
         pw.SizedBox(width: 40),
-        // Firma de Conformidad / Aceptación
+        // Firma de Conformidad / Aceptación del Cliente
         pw.Expanded(
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
               pw.Container(
-                height: 48,
+                height: 54,
                 width: 200,
                 decoration: const pw.BoxDecoration(
-                  border: pw.Border(bottom: pw.BorderSide(color: darkText, width: 1)),
+                  border: pw.Border(bottom: pw.BorderSide(color: darkText, width: 1.2)),
                 ),
               ),
               pw.SizedBox(height: 4),

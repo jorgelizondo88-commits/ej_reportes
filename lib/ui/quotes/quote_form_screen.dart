@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:signature/signature.dart';
 import '../../models/client_model.dart';
 import '../../models/quote_model.dart';
 import '../../services/client_service.dart';
@@ -20,6 +22,8 @@ class QuoteFormScreen extends StatefulWidget {
 class _QuoteFormScreenState extends State<QuoteFormScreen> {
   static const String _quoteDraftKey = 'ej_active_quote_draft';
   static const String _quoteFolioCounterKey = 'ej_consecutive_quote_counter';
+  static const String _prefTechNameKey = 'ej_saved_tech_name';
+  static const String _prefTechSignKey = 'ej_saved_tech_sign';
 
   final ClientService _clientService = ClientService();
   List<ClientModel> _savedClients = [];
@@ -40,6 +44,10 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
   String _facilityType = 'Comercial / Restaurante';
   bool _applyIva = false;
   bool _saveNewClientToDb = true;
+
+  bool _includeSignature = true;
+  Uint8List? _signatureBytes;
+  bool _hasSavedReportSignature = false;
 
   final List<String> _targetedPests = [];
   final List<QuoteItem> _items = [];
@@ -68,10 +76,36 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
     super.initState();
     _initControllers();
     _loadClients();
+    _loadSavedSignatureAndRep();
     if (widget.preselectedClient != null) {
       _applyClient(widget.preselectedClient!);
     } else {
       _initDraftOrNew();
+    }
+  }
+
+  Future<void> _loadSavedSignatureAndRep() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedTechName = prefs.getString(_prefTechNameKey);
+    final savedTechSign = prefs.getString(_prefTechSignKey);
+
+    if (mounted) {
+      setState(() {
+        if ((_repController.text.trim().isEmpty || _repController.text == 'EJ Exterminadores') &&
+            savedTechName != null &&
+            savedTechName.trim().isNotEmpty) {
+          _repController.text = savedTechName.trim();
+        }
+
+        if (savedTechSign != null && savedTechSign.isNotEmpty) {
+          _hasSavedReportSignature = true;
+          if (_signatureBytes == null) {
+            try {
+              _signatureBytes = base64Decode(savedTechSign);
+            } catch (_) {}
+          }
+        }
+      });
     }
   }
 
@@ -146,6 +180,12 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
         _notesController.text = map['notes'] ?? _notesController.text;
         _repController.text = map['elaboratedBy'] ?? _repController.text;
         _applyIva = map['applyIva'] ?? false;
+        _includeSignature = map['includeSignature'] ?? true;
+        if (map['signatureBase64'] != null) {
+          try {
+            _signatureBytes = base64Decode(map['signatureBase64']);
+          } catch (_) {}
+        }
 
         _targetedPests.clear();
         if (map['targetedPests'] != null) {
@@ -196,10 +236,128 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
       'termsAndConditions': _termsController.text,
       'notes': _notesController.text,
       'elaboratedBy': _repController.text,
+      'includeSignature': _includeSignature,
+      'signatureBase64': _signatureBytes != null ? base64Encode(_signatureBytes!) : null,
       'applyIva': _applyIva,
       'items': _items.map((i) => i.toMap()).toList(),
     };
     await prefs.setString(_quoteDraftKey, jsonEncode(draftMap));
+  }
+
+  Future<void> _openFullScreenSignature() async {
+    final controller = SignatureController(
+      penStrokeWidth: 4,
+      penColor: Colors.black,
+      exportBackgroundColor: Colors.transparent,
+    );
+
+    final Uint8List? result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) {
+          return Scaffold(
+            backgroundColor: Colors.white,
+            appBar: AppBar(
+              title: const Text('Firma del Asesor / Prestador'),
+              backgroundColor: const Color(0xFF0F2B48),
+              foregroundColor: Colors.white,
+              actions: [
+                TextButton(
+                  onPressed: () => controller.clear(),
+                  child: const Text('Limpiar', style: TextStyle(color: Colors.white)),
+                ),
+                FilledButton.tonal(
+                  onPressed: () async {
+                    if (controller.isNotEmpty) {
+                      final bytes = await controller.toPngBytes();
+                      if (context.mounted) Navigator.pop(context, bytes);
+                    } else {
+                      if (context.mounted) Navigator.pop(context, null);
+                    }
+                  },
+                  child: const Text('Guardar'),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ),
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    color: Colors.amber.shade50,
+                    width: double.infinity,
+                    child: const Text(
+                      'Firme dentro del área blanca para plasmar su firma en las cotizaciones.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: Colors.brown),
+                    ),
+                  ),
+                  Expanded(
+                    child: Signature(
+                      controller: controller,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _signatureBytes = result;
+        _includeSignature = true;
+      });
+      _saveDraft();
+
+      if (mounted) {
+        final saveAsDefault = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('¿Fijar como Firma Predeterminada?'),
+            content: const Text(
+              '¿Deseas fijar esta firma también como tu firma predeterminada para que se use tanto en Reportes como en futuras Cotizaciones?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Solo para esta cotización'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F2B48),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Fijar para Todo'),
+              ),
+            ],
+          ),
+        );
+
+        if (saveAsDefault == true) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_prefTechSignKey, base64Encode(result));
+          if (_repController.text.trim().isNotEmpty) {
+            await prefs.setString(_prefTechNameKey, _repController.text.trim());
+          }
+          if (mounted) {
+            setState(() => _hasSavedReportSignature = true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('¡Firma fijada como predeterminada para Reportes y Cotizaciones!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      }
+    }
   }
 
   void _applyClient(ClientModel client) {
@@ -488,7 +646,9 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
       applyIva: _applyIva,
       termsAndConditions: _termsController.text.trim(),
       notes: _notesController.text.trim(),
-      elaboratedBy: _repController.text.trim(),
+      elaboratedBy: _repController.text.trim().isNotEmpty ? _repController.text.trim() : 'EJ Exterminadores',
+      includeSignature: _includeSignature,
+      signatureBase64: _includeSignature && _signatureBytes != null ? base64Encode(_signatureBytes!) : null,
     );
 
     if (!mounted) return;
@@ -958,6 +1118,134 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                       controller: _repController,
                       decoration: const InputDecoration(labelText: 'Elaborado por (Asesor / Técnico)'),
                       onChanged: (_) => _saveDraft(),
+                    ),
+                    const SizedBox(height: 14),
+                    // Firma Digital Vinculada con Reportes
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F2B48).withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: const [
+                                  Icon(Icons.draw_outlined, size: 20, color: Color(0xFF0F2B48)),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Firma en la Cotización',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F2B48)),
+                                  ),
+                                ],
+                              ),
+                              Switch(
+                                value: _includeSignature,
+                                activeColor: const Color(0xFF0F2B48),
+                                onChanged: (val) {
+                                  setState(() => _includeSignature = val);
+                                  _saveDraft();
+                                },
+                              ),
+                            ],
+                          ),
+                          if (_includeSignature) ...[
+                            const SizedBox(height: 6),
+                            if (_signatureBytes != null) ...[
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.green.shade300),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.verified, size: 14, color: Colors.green.shade700),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          _hasSavedReportSignature
+                                              ? 'Firma fija registrada en Reportes'
+                                              : 'Firma asignada',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.green.shade800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  TextButton.icon(
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    icon: const Icon(Icons.edit, size: 14),
+                                    label: const Text('Cambiar', style: TextStyle(fontSize: 12)),
+                                    onPressed: _openFullScreenSignature,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 75,
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: Image.memory(_signatureBytes!, fit: BoxFit.contain),
+                              ),
+                            ] else ...[
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.amber.shade200),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Aún no hay firma registrada fija en Reportes.',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.brown),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Puedes firmar ahora aquí o registrarla fija en Reportes y se aplicará automáticamente a todas tus cotizaciones.',
+                                      style: TextStyle(fontSize: 11.5, color: Colors.brown),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF0F2B48),
+                                        foregroundColor: Colors.white,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      icon: const Icon(Icons.edit, size: 16),
+                                      label: const Text('Firmar ahora', style: TextStyle(fontSize: 12)),
+                                      onPressed: _openFullScreenSignature,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
