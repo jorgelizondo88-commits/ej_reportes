@@ -680,31 +680,35 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                       onChanged: (_) => _saveDraft(),
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: const InputDecoration(labelText: 'Correo Electrónico'),
-                            onChanged: (_) => _saveDraft(),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _facilityTypes.contains(_facilityType) ? _facilityType : _facilityTypes.first,
-                            decoration: const InputDecoration(labelText: 'Giro / Instalación'),
-                            items: _facilityTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12)))).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _facilityType = val);
-                                _saveDraft();
-                              }
-                            },
-                          ),
-                        ),
-                      ],
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(
+                        labelText: 'Correo Electrónico',
+                        prefixIcon: Icon(Icons.email_outlined, size: 20),
+                      ),
+                      onChanged: (_) => _saveDraft(),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: _facilityTypes.contains(_facilityType) ? _facilityType : _facilityTypes.first,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Giro / Instalación',
+                        prefixIcon: Icon(Icons.business_outlined, size: 20),
+                      ),
+                      items: _facilityTypes
+                          .map((t) => DropdownMenuItem(
+                                value: t,
+                                child: Text(t, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setState(() => _facilityType = val);
+                          _saveDraft();
+                        }
+                      },
                     ),
                   ],
                 ),

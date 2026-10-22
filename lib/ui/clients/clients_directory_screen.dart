@@ -104,8 +104,9 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
                   value: facilityTypes.contains(facilityType) ? facilityType : facilityTypes.first,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Giro / Instalación'),
-                  items: facilityTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
+                  items: facilityTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
                   onChanged: (val) {
                     if (val != null) setDialogState(() => facilityType = val);
                   },

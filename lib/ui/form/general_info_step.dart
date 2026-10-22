@@ -75,14 +75,6 @@ class _GeneralInfoStepState extends State<GeneralInfoStep> {
   late TextEditingController _findingsController;
   late TextEditingController _recController;
 
-  final List<String> _facilityTypes = [
-    'Comercial / Restaurante',
-    'Industrial / Bodega',
-    'Residencial / Casa',
-    'Oficinas / Corporativo',
-    'Hospitalario / Clínica',
-  ];
-
   final List<String> _availablePests = [
     'Cucaracha alemana',
     'Cucaracha americana',
