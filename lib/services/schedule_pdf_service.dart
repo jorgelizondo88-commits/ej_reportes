@@ -452,7 +452,7 @@ class SchedulePdfService {
               ),
               pw.SizedBox(height: 2),
               pw.Text(
-                'Frecuencia: ${schedule.recurrenceDescription} • Horario Base: ${schedule.defaultTime}',
+                'Frecuencia: ${schedule.recurrenceDescription}   |   Horario Base: ${schedule.defaultTime}',
                 style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey800),
               ),
             ],
@@ -488,12 +488,11 @@ class SchedulePdfService {
           border: pw.TableBorder.all(color: borderColor, width: 0.5),
           columnWidths: const {
             0: pw.FixedColumnWidth(28), // #
-            1: pw.FlexColumnWidth(2.2), // Mes
+            1: pw.FlexColumnWidth(2.3), // Mes
             2: pw.FlexColumnWidth(2.5), // Fecha
             3: pw.FlexColumnWidth(2.2), // Día
-            4: pw.FlexColumnWidth(1.8), // Horario
-            5: pw.FlexColumnWidth(4.0), // Servicio
-            6: pw.FlexColumnWidth(3.0), // Conformidad
+            4: pw.FlexColumnWidth(2.0), // Horario
+            5: pw.FlexColumnWidth(4.8), // Servicio
           },
           children: [
             // Encabezados
@@ -506,13 +505,12 @@ class SchedulePdfService {
                 _th('Día'),
                 _th('Horario'),
                 _th('Tipo de Servicio'),
-                _th('Firma / Sello Recibido'),
               ],
             ),
             // Filas
             ...schedule.visits.map((visit) {
               final isEven = visit.visitNumber % 2 == 0;
-              final bgColor = isEven ? PdfColors.white : PdfColor.fromInt(0xFFFAFAFA);
+              final bgColor = isEven ? PdfColors.white : const PdfColor.fromInt(0xFFFAFAFA);
               final dayName = dayNameFormat.format(visit.date);
               final capitalizedDay = dayName[0].toUpperCase() + dayName.substring(1);
               final monthName = monthFormat.format(visit.date);
@@ -527,32 +525,6 @@ class SchedulePdfService {
                   _td(capitalizedDay),
                   _td(visit.time),
                   _td(visit.serviceType),
-                  pw.Container(
-                    height: 22,
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    alignment: pw.Alignment.center,
-                    child: visit.status == 'Realizada'
-                        ? pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                            decoration: pw.BoxDecoration(
-                              color: PdfColor.fromInt(0xFFE8F5E9),
-                              borderRadius: pw.BorderRadius.circular(2),
-                              border: pw.Border.all(color: PdfColor.fromInt(0xFF81C784), width: 0.5),
-                            ),
-                            child: pw.Text(
-                              'REALIZADO',
-                              style: pw.TextStyle(
-                                fontSize: 6.5,
-                                fontWeight: pw.FontWeight.bold,
-                                color: PdfColor.fromInt(0xFF2E7D32),
-                              ),
-                            ),
-                          )
-                        : pw.Text(
-                            '____________________',
-                            style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey400),
-                          ),
-                  ),
                 ],
               );
             }),
@@ -568,7 +540,7 @@ class SchedulePdfService {
       alignment: pw.Alignment.center,
       child: pw.Text(
         text,
-        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: primaryColor),
+        style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: primaryColor),
         textAlign: pw.TextAlign.center,
       ),
     );
@@ -576,12 +548,12 @@ class SchedulePdfService {
 
   static pw.Widget _td(String text, {bool bold = false, pw.TextAlign align = pw.TextAlign.left}) {
     return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      padding: const pw.EdgeInsets.symmetric(vertical: 4.5, horizontal: 4),
       alignment: align == pw.TextAlign.center ? pw.Alignment.center : pw.Alignment.centerLeft,
       child: pw.Text(
         text,
         style: pw.TextStyle(
-          fontSize: 7.0,
+          fontSize: 7.8,
           fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: darkText,
         ),
@@ -592,6 +564,12 @@ class SchedulePdfService {
 
   // --- CONDICIONES Y NOTAS ---
   static pw.Widget _buildConditionsAndNotes(ScheduleModel schedule) {
+    final conditionLines = schedule.conditions
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -599,7 +577,7 @@ class SchedulePdfService {
         pw.SizedBox(height: 3),
         pw.Container(
           width: double.infinity,
-          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: pw.BoxDecoration(
             border: pw.Border.all(color: borderColor, width: 0.5),
             borderRadius: pw.BorderRadius.circular(4),
@@ -608,10 +586,7 @@ class SchedulePdfService {
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _bullet('1. Las fechas aquí programadas han sido acordadas de común acuerdo con el cliente.'),
-              _bullet('2. En caso de requerir reprogramación de una visita, favor de avisar con un mínimo de 24 horas de anticipación.'),
-              _bullet('3. El cliente se compromete a brindar las facilidades de acceso, agua y energía requeridas para el servicio.'),
-              _bullet('4. Al concluir cada visita se extenderá la Orden de Trabajo y el Certificado Sanitario avalado ante la SSA.'),
+              ...conditionLines.map((line) => _bullet(line)),
               if (schedule.notes.isNotEmpty) ...[
                 pw.SizedBox(height: 3),
                 pw.RichText(
@@ -619,11 +594,11 @@ class SchedulePdfService {
                     children: [
                       pw.TextSpan(
                         text: 'Indicaciones especiales: ',
-                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: darkText),
+                        style: pw.TextStyle(fontSize: 7.8, fontWeight: pw.FontWeight.bold, color: darkText),
                       ),
                       pw.TextSpan(
                         text: schedule.notes,
-                        style: const pw.TextStyle(fontSize: 7.0, color: PdfColors.grey800),
+                        style: const pw.TextStyle(fontSize: 7.8, color: PdfColors.grey800),
                       ),
                     ],
                   ),
@@ -638,8 +613,8 @@ class SchedulePdfService {
 
   static pw.Widget _bullet(String text) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 2),
-      child: pw.Text(text, style: const pw.TextStyle(fontSize: 7.0, color: darkText)),
+      padding: const pw.EdgeInsets.only(bottom: 2.5),
+      child: pw.Text(text, style: const pw.TextStyle(fontSize: 7.8, color: darkText)),
     );
   }
 
@@ -726,12 +701,12 @@ class SchedulePdfService {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            'EJ Exterminadores • Tel. 813-175-9342 • Licencia Sanitaria S.S.A.',
-            style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.grey600),
+            'EJ Exterminadores   |   Tel. 813-175-9342   |   Licencia Sanitaria S.S.A.',
+            style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
           ),
           pw.Text(
             'Página ${context.pageNumber} de ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.grey600),
+            style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
           ),
         ],
       ),

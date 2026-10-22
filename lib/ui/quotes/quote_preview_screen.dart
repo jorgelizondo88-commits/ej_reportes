@@ -140,6 +140,8 @@ class _QuotePreviewScreenState extends State<QuotePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -182,6 +184,7 @@ class _QuotePreviewScreenState extends State<QuotePreviewScreen> {
           canChangePageFormat: false,
           canChangeOrientation: false,
           canDebug: false,
+          maxPageWidth: screenWidth,
           pdfFileName: 'Cotizacion_${widget.quote.quoteFolio}.pdf',
         ),
       ),

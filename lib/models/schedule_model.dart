@@ -69,6 +69,7 @@ class ScheduleModel {
   final DateTime startDate;
   final String defaultTime;
   final String serviceType;
+  final String conditions;
   final String notes;
   final String elaboratedBy;
 
@@ -93,10 +94,16 @@ class ScheduleModel {
     required this.startDate,
     this.defaultTime = '09:00 AM',
     this.serviceType = 'Control y Mantenimiento Periódico',
+    String? conditions,
     this.notes = '',
     this.elaboratedBy = 'EJ Exterminadores',
     required this.visits,
-  });
+  }) : conditions = conditions ?? defaultConditions();
+
+  static String defaultConditions() {
+    return '1. Las fechas aquí programadas han sido acordadas de común acuerdo con el cliente.\n'
+        '2. En caso de requerir reprogramación de una visita, favor de avisar con un mínimo de 24 horas de anticipación.';
+  }
 
   int get totalVisits => visits.length;
   int get completedVisits => visits.where((v) => v.status == 'Realizada').length;
@@ -147,6 +154,7 @@ class ScheduleModel {
       'startDate': startDate.toIso8601String(),
       'defaultTime': defaultTime,
       'serviceType': serviceType,
+      'conditions': conditions,
       'notes': notes,
       'elaboratedBy': elaboratedBy,
       'visits': visits.map((v) => v.toMap()).toList(),
@@ -173,6 +181,7 @@ class ScheduleModel {
       startDate: DateTime.tryParse(map['startDate'] ?? '') ?? DateTime.now(),
       defaultTime: map['defaultTime'] ?? '09:00 AM',
       serviceType: map['serviceType'] ?? 'Control y Mantenimiento Periódico',
+      conditions: map['conditions'] ?? defaultConditions(),
       notes: map['notes'] ?? '',
       elaboratedBy: map['elaboratedBy'] ?? 'EJ Exterminadores',
       visits: (map['visits'] as List<dynamic>? ?? [])

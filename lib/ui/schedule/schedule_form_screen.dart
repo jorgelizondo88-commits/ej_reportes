@@ -34,6 +34,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
   late TextEditingController _phoneController;
   late TextEditingController _emailController;
   late TextEditingController _serviceTypeController;
+  late TextEditingController _conditionsController;
   late TextEditingController _notesController;
   late TextEditingController _repController;
 
@@ -100,6 +101,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
     _phoneController = TextEditingController();
     _emailController = TextEditingController();
     _serviceTypeController = TextEditingController(text: 'Control y Mantenimiento Periódico');
+    _conditionsController = TextEditingController(text: ScheduleModel.defaultConditions());
     _notesController = TextEditingController();
     _repController = TextEditingController(text: 'EJ Exterminadores');
   }
@@ -114,6 +116,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _serviceTypeController.dispose();
+    _conditionsController.dispose();
     _notesController.dispose();
     _repController.dispose();
     super.dispose();
@@ -173,6 +176,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
         _emailController.text = map['email'] ?? '';
         _facilityType = map['facilityType'] ?? 'Comercial / Restaurante';
         _serviceTypeController.text = map['serviceType'] ?? _serviceTypeController.text;
+        _conditionsController.text = map['conditions'] ?? ScheduleModel.defaultConditions();
         _notesController.text = map['notes'] ?? '';
         _repController.text = map['elaboratedBy'] ?? _repController.text;
 
@@ -210,6 +214,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       'email': _emailController.text,
       'facilityType': _facilityType,
       'serviceType': _serviceTypeController.text,
+      'conditions': _conditionsController.text,
       'notes': _notesController.text,
       'elaboratedBy': _repController.text,
       'visits': _visits.map((v) => v.toMap()).toList(),
@@ -377,6 +382,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
         _addressController.clear();
         _phoneController.clear();
         _emailController.clear();
+        _conditionsController.text = ScheduleModel.defaultConditions();
         _notesController.clear();
         _selectedClient = null;
         _startDate = DateTime.now();
@@ -443,6 +449,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       startDate: _startDate,
       defaultTime: _formatTimeOfDay(_defaultTime),
       serviceType: _serviceTypeController.text.trim(),
+      conditions: _conditionsController.text.trim(),
       notes: _notesController.text.trim(),
       elaboratedBy: _repController.text.trim().isNotEmpty ? _repController.text.trim() : 'EJ Exterminadores',
       visits: List.from(_visits),
@@ -1012,7 +1019,58 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
           ),
           const SizedBox(height: 14),
 
-          // 5. Notas y Responsable
+          // 5. Condiciones del Cronograma
+          Card(
+            elevation: 1,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Condiciones del Cronograma',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48))),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF1E6091),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('Restaurar', style: TextStyle(fontSize: 12)),
+                        onPressed: () {
+                          setState(() {
+                            _conditionsController.text = ScheduleModel.defaultConditions();
+                          });
+                          _saveDraft();
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Puedes editar o agregar puntos extras según el acuerdo con el cliente.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _conditionsController,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Condiciones y acuerdos aplicables',
+                      alignLabelWithHint: true,
+                    ),
+                    onChanged: (_) => _saveDraft(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // 6. Notas y Responsable
           Card(
             elevation: 1,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

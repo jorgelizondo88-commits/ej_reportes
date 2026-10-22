@@ -143,6 +143,8 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -185,6 +187,7 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
           canChangePageFormat: false,
           canChangeOrientation: false,
           canDebug: false,
+          maxPageWidth: screenWidth,
           pdfFileName: 'Cronograma_${widget.schedule.folio}.pdf',
         ),
       ),
