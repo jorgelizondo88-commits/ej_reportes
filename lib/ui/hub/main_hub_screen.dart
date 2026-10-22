@@ -267,22 +267,29 @@ class _MainHubScreenState extends State<MainHubScreen> {
   Widget _metricBadge(IconData icon, String value, String label) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.12),
+          color: Colors.white.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.15)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                Text(label, style: const TextStyle(color: Colors.white70, fontSize: 10)),
-              ],
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(height: 3),
+            Text(
+              value,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 1),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white70, fontSize: 9.5),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -316,7 +323,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: iconColor.withOpacity(0.1),
+                    color: iconColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: iconColor, size: 26),
@@ -338,7 +345,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                             decoration: BoxDecoration(
-                              color: badgeColor.withOpacity(0.12),
+                              color: badgeColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -359,29 +366,45 @@ class _MainHubScreenState extends State<MainHubScreen> {
             Row(
               children: [
                 Expanded(
+                  flex: 3,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: iconColor,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                       elevation: 0,
                     ),
                     onPressed: onPrimaryPressed,
-                    child: Text(primaryButtonText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    child: Text(
+                      primaryButtonText,
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
                 if (secondaryButtonText != null && onSecondaryPressed != null) ...[
                   const SizedBox(width: 8),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: iconColor,
-                      side: BorderSide(color: iconColor.withOpacity(0.5)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  Expanded(
+                    flex: 2,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: iconColor,
+                        side: BorderSide(color: iconColor.withValues(alpha: 0.5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                      ),
+                      onPressed: onSecondaryPressed,
+                      child: Text(
+                        secondaryButtonText,
+                        style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                    onPressed: onSecondaryPressed,
-                    child: Text(secondaryButtonText, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ],
