@@ -625,7 +625,7 @@ class ResourcePdfService {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            'EJ Exterminadores   |   Tel. 813-175-9342   |   Licencia Sanitaria S.S.A.',
+            'EJ Exterminadores   |   Tel. 813-175-9342   |   www.ejexterminadores.com',
             style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
           ),
           pw.Text(
