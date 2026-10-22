@@ -319,7 +319,7 @@ class AdvisoryDetailScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       notice.technicalDisclaimer,
-                      style: TextStyle(fontSize: 12.5, color: Colors.brown.shade950, height: 1.35),
+                      style: TextStyle(fontSize: 12.5, color: Colors.brown.shade900, height: 1.35),
                     ),
                   ],
                 ),

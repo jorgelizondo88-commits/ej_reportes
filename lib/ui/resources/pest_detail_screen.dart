@@ -235,7 +235,7 @@ class PestDetailScreen extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       pest.professionalTreatment,
-                      style: TextStyle(fontSize: 12.5, color: Colors.green.shade950, height: 1.35),
+                      style: TextStyle(fontSize: 12.5, color: Colors.green.shade900, height: 1.35),
                     ),
                   ],
                 ),
