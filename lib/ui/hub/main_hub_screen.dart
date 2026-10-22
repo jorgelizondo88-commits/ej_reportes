@@ -8,6 +8,8 @@ import '../history/report_history_screen.dart';
 import '../home_screen.dart';
 import '../quotes/quote_form_screen.dart';
 import '../quotes/quote_history_screen.dart';
+import '../schedule/schedule_form_screen.dart';
+import '../schedule/schedule_history_screen.dart';
 
 class MainHubScreen extends StatefulWidget {
   const MainHubScreen({super.key});
@@ -20,6 +22,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
   int _clientCount = 0;
   int _reportCount = 0;
   int _quoteCount = 0;
+  int _scheduleCount = 0;
 
   @override
   void initState() {
@@ -38,86 +41,17 @@ class _MainHubScreenState extends State<MainHubScreen> {
     final rawQuotes = prefs.getString('ej_quotes_history_list');
     final quotesList = (rawQuotes != null && rawQuotes.isNotEmpty) ? jsonDecode(rawQuotes) : [];
 
+    final rawSchedules = prefs.getString('ej_schedules_history_list');
+    final schedulesList = (rawSchedules != null && rawSchedules.isNotEmpty) ? jsonDecode(rawSchedules) : [];
+
     if (mounted) {
       setState(() {
         _clientCount = clients.length;
         _reportCount = reportsList.length;
         _quoteCount = quotesList.length;
+        _scheduleCount = schedulesList.length;
       });
     }
-  }
-
-  void _showCalendarPreviewDialog() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      backgroundColor: Colors.white,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.calendar_month, color: Colors.orange, size: 28),
-                ),
-                const SizedBox(width: 14),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Módulo de Calendarización', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
-                    Text('Próxima Fase del Sistema', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Este módulo está preparado para integrarse sin alterar tus reportes ni cotizaciones. Incluirá:',
-              style: TextStyle(fontSize: 13, color: Colors.black87),
-            ),
-            const SizedBox(height: 10),
-            _featureBullet('Agenda y cronograma de visitas mensuales y bimestrales.'),
-            _featureBullet('Generación de Calendario Anual en PDF para entregar al cliente.'),
-            _featureBullet('Recordatorios de vencimiento de servicios y certificados.'),
-            _featureBullet('Sincronización con la base de datos de tus clientes actuales.'),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F2B48),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Entendido'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _featureBullet(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('✓ ', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 14)),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 13, color: Colors.black87))),
-        ],
-      ),
-    );
   }
 
   @override
@@ -205,9 +139,11 @@ class _MainHubScreenState extends State<MainHubScreen> {
                     Row(
                       children: [
                         _metricBadge(Icons.description, '$_reportCount', 'Reportes'),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
                         _metricBadge(Icons.request_quote, '$_quoteCount', 'Cotizaciones'),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 6),
+                        _metricBadge(Icons.calendar_month, '$_scheduleCount', 'Pólizas'),
+                        const SizedBox(width: 6),
                         _metricBadge(Icons.people, '$_clientCount', 'Clientes'),
                       ],
                     ),
@@ -252,7 +188,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
               _moduleCard(
                 icon: Icons.request_quote_outlined,
                 iconColor: const Color(0xFF1E6091),
-                badgeText: 'Nuevo',
+                badgeText: 'Activo',
                 badgeColor: Colors.blueAccent,
                 title: 'Cotizaciones y Presupuestos',
                 subtitle: 'Genera cotizaciones formales en PDF con cálculo de precios, IVA, plagas objetivo y condiciones comerciales.',
@@ -274,18 +210,30 @@ class _MainHubScreenState extends State<MainHubScreen> {
               ),
               const SizedBox(height: 14),
 
-              // 3. Tarjeta CALENDARIZACIÓN (PREPARADA)
+              // 3. Tarjeta CALENDARIZACIÓN
               _moduleCard(
                 icon: Icons.calendar_month_outlined,
                 iconColor: Colors.orange.shade800,
-                badgeText: 'Próximamente',
+                badgeText: _scheduleCount > 0 ? '$_scheduleCount activas' : 'Activo',
                 badgeColor: Colors.orange,
                 title: 'Calendarización y Cronograma',
-                subtitle: 'Programa de visitas periódicas mensuales/bimestrales y calendario anual de aplicaciones para clientes.',
-                primaryButtonText: 'Ver Plan de Calendarización',
-                onPrimaryPressed: _showCalendarPreviewDialog,
-                secondaryButtonText: null,
-                onSecondaryPressed: null,
+                subtitle: 'Programa periódico de visitas mensuales/bimestrales y calendario oficial en PDF para clientes.',
+                primaryButtonText: 'Nueva Calendarización',
+                onPrimaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ScheduleFormScreen()),
+                  );
+                  _loadMetrics();
+                },
+                secondaryButtonText: 'Historial y Agenda',
+                onSecondaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ScheduleHistoryScreen()),
+                  );
+                  _loadMetrics();
+                },
               ),
               const SizedBox(height: 14),
 
