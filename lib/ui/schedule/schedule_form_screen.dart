@@ -507,39 +507,39 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                   const Text('Datos del Programa de Calendarización',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48))),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _folioController,
-                          decoration: const InputDecoration(labelText: 'Folio Cronograma'),
-                          onChanged: (_) => _saveDraft(),
-                        ),
+                  // Folio con ancho completo para visualizar siempre hasta el último dígito
+                  TextField(
+                    controller: _folioController,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48), letterSpacing: 0.5),
+                    decoration: const InputDecoration(
+                      labelText: 'Folio del Cronograma',
+                      prefixIcon: Icon(Icons.tag, size: 20, color: Color(0xFF0F2B48)),
+                    ),
+                    onChanged: (_) => _saveDraft(),
+                  ),
+                  const SizedBox(height: 10),
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _startDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2035),
+                        helpText: 'Mes de Inicio del Cronograma',
+                      );
+                      if (picked != null) {
+                        setState(() => _startDate = picked);
+                        _generateVisits();
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Mes Inicial del Cronograma',
+                        prefixIcon: Icon(Icons.calendar_month_outlined, size: 20),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _startDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2035),
-                              helpText: 'Mes de Inicio del Cronograma',
-                            );
-                            if (picked != null) {
-                              setState(() => _startDate = picked);
-                              _generateVisits();
-                            }
-                          },
-                          child: InputDecorator(
-                            decoration: const InputDecoration(labelText: 'Mes Inicial'),
-                            child: Text(monthFormat.format(_startDate).toUpperCase(),
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ),
-                    ],
+                      child: Text(monthFormat.format(_startDate).toUpperCase(),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(

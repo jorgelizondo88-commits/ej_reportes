@@ -708,37 +708,37 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
                   children: [
                     const Text('Datos Generales de la Cotización', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48))),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _folioController,
-                            decoration: const InputDecoration(labelText: 'Folio'),
-                            onChanged: (_) => _saveDraft(),
-                          ),
+                    // Folio con ancho completo para visualizar siempre hasta el último dígito
+                    TextField(
+                      controller: _folioController,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48), letterSpacing: 0.5),
+                      decoration: const InputDecoration(
+                        labelText: 'Folio de Cotización',
+                        prefixIcon: Icon(Icons.tag, size: 20, color: Color(0xFF0F2B48)),
+                      ),
+                      onChanged: (_) => _saveDraft(),
+                    ),
+                    const SizedBox(height: 10),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _quoteDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2035),
+                        );
+                        if (picked != null) {
+                          setState(() => _quoteDate = picked);
+                          _saveDraft();
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Fecha de Emisión',
+                          prefixIcon: Icon(Icons.calendar_today_outlined, size: 20),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: _quoteDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2035),
-                              );
-                              if (picked != null) {
-                                setState(() => _quoteDate = picked);
-                                _saveDraft();
-                              }
-                            },
-                            child: InputDecorator(
-                              decoration: const InputDecoration(labelText: 'Fecha de Emisión'),
-                              child: Text(dateFormat.format(_quoteDate), style: const TextStyle(fontSize: 14)),
-                            ),
-                          ),
-                        ),
-                      ],
+                        child: Text(dateFormat.format(_quoteDate), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<int>(
