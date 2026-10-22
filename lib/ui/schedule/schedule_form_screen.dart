@@ -43,10 +43,13 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
   bool _saveNewClientToDb = true;
 
   // Recurrencia
+  int _visitsPerMonth = 1; // 1 = Mensual, 2 = Quincenal / 2 visitas al mes
   String _recurrenceMode = 'relative'; // 'relative' o 'fixed_day'
   int _ordinalWeek = 1; // 1 = 1er, 2 = 2do, 3 = 3er, 4 = 4to, 5 = Último
+  int _secondOrdinalWeek = 3; // 3 = 3er para 2da visita si es relative
   int _weekday = 7; // 1 = Lunes, ..., 7 = Domingo (Default: Domingo)
   int _fixedDay = 1; // 1..31
+  int _secondFixedDay = 15; // Día 15 para 2da visita si es fixed_day
   int _durationMonths = 12; // 3, 5, 6, 12...
   TimeOfDay _defaultTime = const TimeOfDay(hour: 9, minute: 0);
 
@@ -165,10 +168,13 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
         _titleController.text = map['title'] ?? _titleController.text;
         _startDate = DateTime.tryParse(map['startDate'] ?? '') ?? DateTime.now();
         _durationMonths = map['durationMonths'] ?? 12;
+        _visitsPerMonth = map['visitsPerMonth'] ?? 1;
         _recurrenceMode = map['recurrenceMode'] ?? 'relative';
         _ordinalWeek = map['ordinalWeek'] ?? 1;
+        _secondOrdinalWeek = map['secondOrdinalWeek'] ?? 3;
         _weekday = map['weekday'] ?? 7;
         _fixedDay = map['fixedDay'] ?? 1;
+        _secondFixedDay = map['secondFixedDay'] ?? 15;
         _businessController.text = map['businessName'] ?? '';
         _contactController.text = map['contactName'] ?? '';
         _addressController.text = map['address'] ?? '';
@@ -203,10 +209,13 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       'title': _titleController.text,
       'startDate': _startDate.toIso8601String(),
       'durationMonths': _durationMonths,
+      'visitsPerMonth': _visitsPerMonth,
       'recurrenceMode': _recurrenceMode,
       'ordinalWeek': _ordinalWeek,
+      'secondOrdinalWeek': _secondOrdinalWeek,
       'weekday': _weekday,
       'fixedDay': _fixedDay,
+      'secondFixedDay': _secondFixedDay,
       'businessName': _businessController.text,
       'contactName': _contactController.text,
       'address': _addressController.text,
@@ -271,26 +280,67 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
           ? _serviceTypeController.text.trim()
           : 'Control y Mantenimiento Mensual';
 
+      final List<ScheduledVisit> generated = [];
+
       for (int i = 0; i < _durationMonths; i++) {
         final totalMonth = _startDate.month + i;
         final year = _startDate.year + ((totalMonth - 1) ~/ 12);
         final month = ((totalMonth - 1) % 12) + 1;
 
-        DateTime visitDate;
+        // Visita 1 del mes
+        DateTime visitDate1;
         if (_recurrenceMode == 'relative') {
-          visitDate = _calculateNthWeekdayOfMonth(year, month, _ordinalWeek, _weekday);
+          visitDate1 = _calculateNthWeekdayOfMonth(year, month, _ordinalWeek, _weekday);
         } else {
-          visitDate = _calculateFixedDayOfMonth(year, month, _fixedDay);
+          visitDate1 = _calculateFixedDayOfMonth(year, month, _fixedDay);
         }
 
-        _visits.add(
+        generated.add(
           ScheduledVisit(
-            id: '${DateTime.now().millisecondsSinceEpoch}_$i',
-            visitNumber: i + 1,
-            date: visitDate,
+            id: '${DateTime.now().millisecondsSinceEpoch}_${i}_1',
+            visitNumber: 0,
+            date: visitDate1,
             time: defaultTimeStr,
             serviceType: serviceTypeStr,
             status: 'Pendiente',
+          ),
+        );
+
+        // Si son 2 visitas por mes (Quincenal)
+        if (_visitsPerMonth == 2) {
+          DateTime visitDate2;
+          if (_recurrenceMode == 'relative') {
+            visitDate2 = _calculateNthWeekdayOfMonth(year, month, _secondOrdinalWeek, _weekday);
+          } else {
+            visitDate2 = _calculateFixedDayOfMonth(year, month, _secondFixedDay);
+          }
+
+          generated.add(
+            ScheduledVisit(
+              id: '${DateTime.now().millisecondsSinceEpoch}_${i}_2',
+              visitNumber: 0,
+              date: visitDate2,
+              time: defaultTimeStr,
+              serviceType: serviceTypeStr,
+              status: 'Pendiente',
+            ),
+          );
+        }
+      }
+
+      // Ordenar cronológicamente todas las visitas generadas
+      generated.sort((a, b) => a.date.compareTo(b.date));
+
+      // Asignar numeración consecutiva
+      for (int idx = 0; idx < generated.length; idx++) {
+        _visits.add(
+          ScheduledVisit(
+            id: generated[idx].id,
+            visitNumber: idx + 1,
+            date: generated[idx].date,
+            time: generated[idx].time,
+            serviceType: generated[idx].serviceType,
+            status: generated[idx].status,
           ),
         );
       }
@@ -387,9 +437,13 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
         _selectedClient = null;
         _startDate = DateTime.now();
         _durationMonths = 12;
+        _visitsPerMonth = 1;
         _recurrenceMode = 'relative';
         _ordinalWeek = 1;
+        _secondOrdinalWeek = 3;
         _weekday = 7;
+        _fixedDay = 1;
+        _secondFixedDay = 15;
       });
       _generateVisits();
     }
@@ -442,9 +496,12 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       clientEmail: _emailController.text.trim(),
       facilityType: _facilityType,
       recurrenceType: _recurrenceMode,
+      visitsPerMonth: _visitsPerMonth,
       ordinalWeek: _ordinalWeek,
+      secondOrdinalWeek: _secondOrdinalWeek,
       weekday: _weekday,
       fixedDay: _fixedDay,
+      secondFixedDay: _secondFixedDay,
       durationMonths: _durationMonths,
       startDate: _startDate,
       defaultTime: _formatTimeOfDay(_defaultTime),
@@ -694,6 +751,64 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                   ),
                   const SizedBox(height: 12),
 
+                  // Frecuencia del Servicio
+                  const Text('Frecuencia del Servicio:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ChoiceChip(
+                          label: Center(
+                            child: Text(
+                              '1 Visita / Mes (Mensual)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _visitsPerMonth == 1 ? Colors.white : Colors.black87,
+                                fontWeight: _visitsPerMonth == 1 ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          selected: _visitsPerMonth == 1,
+                          selectedColor: const Color(0xFF0F2B48),
+                          onSelected: (val) {
+                            if (val) {
+                              setState(() => _visitsPerMonth = 1);
+                              _generateVisits();
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ChoiceChip(
+                          label: Center(
+                            child: Text(
+                              '2 Visitas / Mes (Quincenal)',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: _visitsPerMonth == 2 ? Colors.white : Colors.black87,
+                                fontWeight: _visitsPerMonth == 2 ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          selected: _visitsPerMonth == 2,
+                          selectedColor: const Color(0xFF0F2B48),
+                          onSelected: (val) {
+                            if (val) {
+                              setState(() => _visitsPerMonth = 2);
+                              _generateVisits();
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
                   // Selector de Tipo de Regla
                   Row(
                     children: [
@@ -701,7 +816,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                         child: ChoiceChip(
                           label: Center(
                             child: Text(
-                              'Día Relativo (1er Dom)',
+                              _visitsPerMonth == 1 ? 'Día Relativo (1er Dom)' : 'Días Relativos (1er y 3er)',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -725,7 +840,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                         child: ChoiceChip(
                           label: Center(
                             child: Text(
-                              'Día Fijo (Ej. Día 15)',
+                              _visitsPerMonth == 1 ? 'Día Fijo (Ej. Día 15)' : 'Días Fijos (Ej. 1 y 15)',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -749,66 +864,172 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                   const SizedBox(height: 14),
 
                   if (_recurrenceMode == 'relative') ...[
-                    Row(
-                      children: [
-                        // Ordinal
-                        Expanded(
-                          flex: 5,
-                          child: DropdownButtonFormField<int>(
-                            value: _ordinalWeek,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Semana / Posición'),
-                            items: _ordinals.entries
-                                .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13))))
-                                .toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _ordinalWeek = val);
-                                _generateVisits();
-                              }
-                            },
+                    if (_visitsPerMonth == 1) ...[
+                      Row(
+                        children: [
+                          // Ordinal
+                          Expanded(
+                            flex: 5,
+                            child: DropdownButtonFormField<int>(
+                              value: _ordinalWeek,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Semana / Posición'),
+                              items: _ordinals.entries
+                                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13))))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _ordinalWeek = val);
+                                  _generateVisits();
+                                }
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Día de la Semana
-                        Expanded(
-                          flex: 6,
-                          child: DropdownButtonFormField<int>(
-                            value: _weekday,
-                            isExpanded: true,
-                            decoration: const InputDecoration(labelText: 'Día de la Semana'),
-                            items: _weekdays.entries
-                                .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13))))
-                                .toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _weekday = val);
-                                _generateVisits();
-                              }
-                            },
+                          const SizedBox(width: 10),
+                          // Día de la Semana
+                          Expanded(
+                            flex: 6,
+                            child: DropdownButtonFormField<int>(
+                              value: _weekday,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: 'Día de la Semana'),
+                              items: _weekdays.entries
+                                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13))))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _weekday = val);
+                                  _generateVisits();
+                                }
+                              },
+                            ),
                           ),
+                        ],
+                      ),
+                    ] else ...[
+                      // 2 Visitas al mes - Relativas
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _ordinalWeek,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: '1ra Visita (Semana)'),
+                              items: _ordinals.entries
+                                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 12.5))))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _ordinalWeek = val);
+                                  _generateVisits();
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _secondOrdinalWeek,
+                              isExpanded: true,
+                              decoration: const InputDecoration(labelText: '2da Visita (Semana)'),
+                              items: _ordinals.entries
+                                  .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 12.5))))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _secondOrdinalWeek = val);
+                                  _generateVisits();
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int>(
+                        value: _weekday,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Día de la Semana para ambas visitas',
+                          prefixIcon: Icon(Icons.event_repeat, size: 20),
                         ),
-                      ],
-                    ),
+                        items: _weekdays.entries
+                            .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13))))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _weekday = val);
+                            _generateVisits();
+                          }
+                        },
+                      ),
+                    ],
                   ] else ...[
                     // Día fijo
-                    DropdownButtonFormField<int>(
-                      value: _fixedDay,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Día fijo de cada mes',
-                        prefixIcon: Icon(Icons.event, size: 20),
+                    if (_visitsPerMonth == 1) ...[
+                      DropdownButtonFormField<int>(
+                        value: _fixedDay,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Día fijo de cada mes',
+                          prefixIcon: Icon(Icons.event, size: 20),
+                        ),
+                        items: List.generate(31, (i) => i + 1)
+                            .map((d) => DropdownMenuItem(value: d, child: Text('Día $d de cada mes')))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() => _fixedDay = val);
+                            _generateVisits();
+                          }
+                        },
                       ),
-                      items: List.generate(31, (i) => i + 1)
-                          .map((d) => DropdownMenuItem(value: d, child: Text('Día $d de cada mes')))
-                          .toList(),
-                      onChanged: (val) {
-                        if (val != null) {
-                          setState(() => _fixedDay = val);
-                          _generateVisits();
-                        }
-                      },
-                    ),
+                    ] else ...[
+                      // 2 Visitas al mes - Días fijos
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _fixedDay,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: '1er Día del Mes',
+                                prefixIcon: Icon(Icons.event, size: 18),
+                              ),
+                              items: List.generate(31, (i) => i + 1)
+                                  .map((d) => DropdownMenuItem(value: d, child: Text('Día $d')))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _fixedDay = val);
+                                  _generateVisits();
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<int>(
+                              value: _secondFixedDay,
+                              isExpanded: true,
+                              decoration: const InputDecoration(
+                                labelText: '2do Día del Mes',
+                                prefixIcon: Icon(Icons.event, size: 18),
+                              ),
+                              items: List.generate(31, (i) => i + 1)
+                                  .map((d) => DropdownMenuItem(value: d, child: Text('Día $d')))
+                                  .toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _secondFixedDay = val);
+                                  _generateVisits();
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
 
                   const SizedBox(height: 14),

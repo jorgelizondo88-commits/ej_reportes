@@ -62,9 +62,12 @@ class ScheduleModel {
 
   // Parámetros de Recurrencia
   final String recurrenceType; // 'relative', 'fixed_day', 'custom'
+  final int visitsPerMonth; // 1 = Mensual, 2 = Quincenal / 2 veces por mes
   final int ordinalWeek; // 1 = 1er, 2 = 2do, 3 = 3er, 4 = 4to, 5 = Último
+  final int secondOrdinalWeek; // Para 2da visita si es relative (default 3 = 3er)
   final int weekday; // 1 = Lunes, ..., 7 = Domingo
   final int fixedDay; // 1..31
+  final int secondFixedDay; // 1..31 para 2da visita si es fixed_day (default 15)
   final int durationMonths; // ej. 3, 5, 6, 12 meses
   final DateTime startDate;
   final String defaultTime;
@@ -87,9 +90,12 @@ class ScheduleModel {
     required this.clientEmail,
     this.facilityType = 'Comercial / Restaurante',
     this.recurrenceType = 'relative',
+    this.visitsPerMonth = 1,
     this.ordinalWeek = 1,
+    this.secondOrdinalWeek = 3,
     this.weekday = 7, // Domingo por defecto según ejemplo del usuario
     this.fixedDay = 1,
+    this.secondFixedDay = 15,
     this.durationMonths = 12,
     required this.startDate,
     this.defaultTime = '09:00 AM',
@@ -113,24 +119,37 @@ class ScheduleModel {
 
   /// Descripción legible de la regla de periodicidad
   String get recurrenceDescription {
-    if (recurrenceType == 'relative') {
-      final ordinals = {1: 'Primer', 2: 'Segundo', 3: 'Tercer', 4: 'Cuarto', 5: 'Último'};
-      final days = {
-        1: 'Lunes',
-        2: 'Martes',
-        3: 'Miércoles',
-        4: 'Jueves',
-        5: 'Viernes',
-        6: 'Sábado',
-        7: 'Domingo',
-      };
-      final ordStr = ordinals[ordinalWeek] ?? 'Primer';
-      final dayStr = days[weekday] ?? 'Domingo';
-      return '$ordStr $dayStr de cada mes ($durationMonths meses)';
-    } else if (recurrenceType == 'fixed_day') {
-      return 'Día $fixedDay de cada mes ($durationMonths meses)';
+    final ordinals = {1: '1er', 2: '2do', 3: '3er', 4: '4to', 5: 'Último'};
+    final days = {
+      1: 'Lunes',
+      2: 'Martes',
+      3: 'Miércoles',
+      4: 'Jueves',
+      5: 'Viernes',
+      6: 'Sábado',
+      7: 'Domingo',
+    };
+    final dayStr = days[weekday] ?? 'Domingo';
+
+    if (visitsPerMonth == 2) {
+      if (recurrenceType == 'relative') {
+        final ord1 = ordinals[ordinalWeek] ?? '1er';
+        final ord2 = ordinals[secondOrdinalWeek] ?? '3er';
+        return 'Quincenal ($ord1 y $ord2 $dayStr de cada mes) - $durationMonths meses';
+      } else if (recurrenceType == 'fixed_day') {
+        return 'Quincenal (Días $fixedDay y $secondFixedDay de cada mes) - $durationMonths meses';
+      } else {
+        return 'Fechas personalizadas ($totalVisits visitas)';
+      }
     } else {
-      return 'Fechas personalizadas ($totalVisits visitas)';
+      if (recurrenceType == 'relative') {
+        final ordStr = ordinals[ordinalWeek] ?? 'Primer';
+        return '$ordStr $dayStr de cada mes ($durationMonths meses)';
+      } else if (recurrenceType == 'fixed_day') {
+        return 'Día $fixedDay de cada mes ($durationMonths meses)';
+      } else {
+        return 'Fechas personalizadas ($totalVisits visitas)';
+      }
     }
   }
 
@@ -147,9 +166,12 @@ class ScheduleModel {
       'clientEmail': clientEmail,
       'facilityType': facilityType,
       'recurrenceType': recurrenceType,
+      'visitsPerMonth': visitsPerMonth,
       'ordinalWeek': ordinalWeek,
+      'secondOrdinalWeek': secondOrdinalWeek,
       'weekday': weekday,
       'fixedDay': fixedDay,
+      'secondFixedDay': secondFixedDay,
       'durationMonths': durationMonths,
       'startDate': startDate.toIso8601String(),
       'defaultTime': defaultTime,
@@ -174,9 +196,12 @@ class ScheduleModel {
       clientEmail: map['clientEmail'] ?? '',
       facilityType: map['facilityType'] ?? 'Comercial / Restaurante',
       recurrenceType: map['recurrenceType'] ?? 'relative',
+      visitsPerMonth: map['visitsPerMonth'] ?? 1,
       ordinalWeek: map['ordinalWeek'] ?? 1,
+      secondOrdinalWeek: map['secondOrdinalWeek'] ?? 3,
       weekday: map['weekday'] ?? 7,
       fixedDay: map['fixedDay'] ?? 1,
+      secondFixedDay: map['secondFixedDay'] ?? 15,
       durationMonths: map['durationMonths'] ?? 12,
       startDate: DateTime.tryParse(map['startDate'] ?? '') ?? DateTime.now(),
       defaultTime: map['defaultTime'] ?? '09:00 AM',
