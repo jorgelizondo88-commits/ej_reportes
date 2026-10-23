@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,15 +79,37 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       return;
     }
 
-    final clientTitle = (quote['businessName'] != null && quote['businessName'].toString().isNotEmpty)
-        ? quote['businessName']
-        : quote['clientName'];
+    final folio = (quote['folio'] ?? '').toString().trim();
+    final clientTitle = (quote['businessName'] != null && quote['businessName'].toString().trim().isNotEmpty)
+        ? quote['businessName'].toString().trim()
+        : (quote['clientName'] ?? '').toString().trim();
 
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Cotización de Servicios de Control de Plagas - Folio ${quote['folio']}',
-      subject: 'Cotización: $clientTitle',
-    );
+    final cleanFolio = folio.replaceAll(RegExp(r'[^\w-]'), '_');
+    final cleanClient = clientTitle
+        .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+
+    final fileName = cleanClient.isEmpty
+        ? (cleanFolio.isEmpty ? 'Cotizacion.pdf' : 'Cotizacion_$cleanFolio.pdf')
+        : 'Cotizacion_${cleanFolio}_$cleanClient.pdf';
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/$fileName');
+      await file.copy(tempFile.path);
+
+      await Share.shareXFiles(
+        [XFile(tempFile.path, name: fileName)],
+        text: 'Cotización de Servicios de Control de Plagas - Folio $folio',
+        subject: 'Cotización: ${clientTitle.isNotEmpty ? clientTitle : folio}',
+      );
+    } catch (_) {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Cotización de Servicios de Control de Plagas - Folio $folio',
+        subject: 'Cotización: ${clientTitle.isNotEmpty ? clientTitle : folio}',
+      );
+    }
   }
 
   void _openViewer(Map<String, dynamic> quote) {
@@ -101,12 +124,19 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       return;
     }
 
+    final folio = (quote['folio'] ?? '').toString().trim();
+    final clientTitle = (quote['businessName'] != null && quote['businessName'].toString().trim().isNotEmpty)
+        ? quote['businessName'].toString().trim()
+        : (quote['clientName'] ?? '').toString().trim();
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => _SavedQuoteViewerScreen(
-          title: 'Cotización: ${quote['folio']}',
+          title: 'Cotización: $folio',
           filePath: filePath,
+          folio: folio,
+          clientName: clientTitle,
         ),
       ),
     );
@@ -376,12 +406,65 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
 class _SavedQuoteViewerScreen extends StatelessWidget {
   final String title;
   final String filePath;
+  final String folio;
+  final String clientName;
 
-  const _SavedQuoteViewerScreen({required this.title, required this.filePath});
+  const _SavedQuoteViewerScreen({
+    required this.title,
+    required this.filePath,
+    this.folio = '',
+    this.clientName = '',
+  });
+
+  String _buildFileName() {
+    final cleanFolio = folio.trim().replaceAll(RegExp(r'[^\w-]'), '_');
+    final cleanClient = clientName
+        .trim()
+        .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+
+    if (cleanClient.isEmpty) {
+      return cleanFolio.isEmpty ? 'Cotizacion.pdf' : 'Cotizacion_$cleanFolio.pdf';
+    }
+    return 'Cotizacion_${cleanFolio}_$cleanClient.pdf';
+  }
+
+  Future<void> _share(BuildContext context) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El archivo PDF no se encuentra disponible.')),
+        );
+      }
+      return;
+    }
+
+    final fileName = _buildFileName();
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/$fileName');
+      await file.copy(tempFile.path);
+
+      await Share.shareXFiles(
+        [XFile(tempFile.path, name: fileName)],
+        text: 'Cotización de Servicios de Control de Plagas - Folio $folio',
+        subject: 'Cotización: ${clientName.isNotEmpty ? clientName : folio}',
+      );
+    } catch (_) {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Cotización de Servicios de Control de Plagas - Folio $folio',
+        subject: 'Cotización: ${clientName.isNotEmpty ? clientName : folio}',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final file = File(filePath);
+    final fileName = _buildFileName();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -390,9 +473,8 @@ class _SavedQuoteViewerScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
-            onPressed: () {
-              Share.shareXFiles([XFile(filePath)], text: title);
-            },
+            tooltip: 'Compartir Cotización',
+            onPressed: () => _share(context),
           ),
         ],
       ),
@@ -402,6 +484,7 @@ class _SavedQuoteViewerScreen extends StatelessWidget {
         allowSharing: false,
         canChangePageFormat: false,
         canChangeOrientation: false,
+        pdfFileName: fileName,
       ),
     );
   }

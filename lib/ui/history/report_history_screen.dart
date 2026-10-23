@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -78,15 +79,38 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
       return;
     }
 
-    final clientTitle = (report['businessName'] != null && report['businessName'].toString().isNotEmpty)
-        ? report['businessName']
-        : report['clientName'];
+    final folio = (report['folio'] ?? '').toString().trim();
+    final clientTitle = (report['businessName'] != null && report['businessName'].toString().trim().isNotEmpty)
+        ? report['businessName'].toString().trim()
+        : (report['clientName'] ?? '').toString().trim();
 
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'Reporte de Servicio de Control de Plagas - Folio ${report['folio']}',
-      subject: 'Reporte de Servicio: $clientTitle',
-    );
+    final cleanFolio = folio.replaceAll(RegExp(r'[^\w-]'), '_');
+    final cleanClient = clientTitle
+        .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+
+    final fileName = cleanClient.isEmpty
+        ? (cleanFolio.isEmpty ? 'Reporte.pdf' : 'Reporte_$cleanFolio.pdf')
+        : 'Reporte_${cleanFolio}_$cleanClient.pdf';
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/$fileName');
+      await file.copy(tempFile.path);
+
+      await Share.shareXFiles(
+        [XFile(tempFile.path, name: fileName)],
+        text: 'Reporte de Servicio de Control de Plagas - Folio $folio',
+        subject: 'Reporte de Servicio: ${clientTitle.isNotEmpty ? clientTitle : folio}',
+      );
+    } catch (_) {
+      // Si por alguna razón falla la copia temporal, compartimos el original
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Reporte de Servicio de Control de Plagas - Folio $folio',
+        subject: 'Reporte de Servicio: ${clientTitle.isNotEmpty ? clientTitle : folio}',
+      );
+    }
   }
 
   void _openViewer(Map<String, dynamic> report) {
@@ -101,12 +125,19 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
       return;
     }
 
+    final folio = (report['folio'] ?? '').toString().trim();
+    final clientTitle = (report['businessName'] != null && report['businessName'].toString().trim().isNotEmpty)
+        ? report['businessName'].toString().trim()
+        : (report['clientName'] ?? '').toString().trim();
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => _SavedPdfViewerScreen(
-          title: 'Folio: ${report['folio']}',
+          title: 'Folio: $folio',
           filePath: filePath,
+          folio: folio,
+          clientName: clientTitle,
         ),
       ),
     );
@@ -381,26 +412,76 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 class _SavedPdfViewerScreen extends StatelessWidget {
   final String title;
   final String filePath;
+  final String folio;
+  final String clientName;
 
-  const _SavedPdfViewerScreen({required this.title, required this.filePath});
+  const _SavedPdfViewerScreen({
+    required this.title,
+    required this.filePath,
+    this.folio = '',
+    this.clientName = '',
+  });
+
+  String _buildFileName() {
+    final cleanFolio = folio.trim().replaceAll(RegExp(r'[^\w-]'), '_');
+    final cleanClient = clientName
+        .trim()
+        .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+
+    if (cleanClient.isEmpty) {
+      return cleanFolio.isEmpty ? 'Reporte.pdf' : 'Reporte_$cleanFolio.pdf';
+    }
+    return 'Reporte_${cleanFolio}_$cleanClient.pdf';
+  }
+
+  Future<void> _share(BuildContext context) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('El archivo PDF no se encuentra disponible.')),
+        );
+      }
+      return;
+    }
+
+    final fileName = _buildFileName();
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/$fileName');
+      await file.copy(tempFile.path);
+
+      await Share.shareXFiles(
+        [XFile(tempFile.path, name: fileName)],
+        text: 'Reporte de Servicio de Control de Plagas - Folio $folio',
+        subject: 'Reporte de Servicio: ${clientName.isNotEmpty ? clientName : folio}',
+      );
+    } catch (_) {
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Reporte de Servicio de Control de Plagas - Folio $folio',
+        subject: 'Reporte de Servicio: ${clientName.isNotEmpty ? clientName : folio}',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final file = File(filePath);
     final screenWidth = MediaQuery.of(context).size.width;
+    final fileName = _buildFileName();
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
             tooltip: 'Compartir PDF',
-            onPressed: () {
-              Share.shareXFiles([XFile(file.path)], text: 'Reporte de Servicio $title');
-            },
+            onPressed: () => _share(context),
           ),
         ],
       ),
@@ -417,7 +498,7 @@ class _SavedPdfViewerScreen extends StatelessWidget {
           canChangePageFormat: false,
           canDebug: false,
           maxPageWidth: screenWidth,
-          pdfFileName: '${title.replaceAll(' ', '_')}.pdf',
+          pdfFileName: fileName,
         ),
       ),
     );

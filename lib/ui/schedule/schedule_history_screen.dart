@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/schedule_model.dart';
@@ -135,7 +136,7 @@ class _ScheduleHistoryScreenState extends State<ScheduleHistoryScreen> with Sing
     }
   }
 
-  void _openSchedulePdf(Map<String, dynamic> entry) {
+  void _openSchedulePdf(Map<String, dynamic> entry) async {
     if (entry['scheduleData'] != null) {
       final model = ScheduleModel.fromMap(entry['scheduleData']);
       Navigator.push(
@@ -143,7 +144,23 @@ class _ScheduleHistoryScreenState extends State<ScheduleHistoryScreen> with Sing
         MaterialPageRoute(builder: (context) => SchedulePreviewScreen(schedule: model)),
       );
     } else if (entry['filePath'] != null && File(entry['filePath']).existsSync()) {
-      Share.shareXFiles([XFile(entry['filePath'])]);
+      final file = File(entry['filePath']);
+      final folio = (entry['folio'] ?? '').toString().trim();
+      final client = (entry['businessName'] ?? '').toString().trim();
+      final cleanFolio = folio.replaceAll(RegExp(r'[^\w-]'), '_');
+      final cleanClient = client
+          .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+          .replaceAll(RegExp(r'\s+'), '_');
+      final fileName = cleanClient.isEmpty ? 'Cronograma_$cleanFolio.pdf' : 'Cronograma_${cleanFolio}_$cleanClient.pdf';
+
+      try {
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File('${tempDir.path}/$fileName');
+        await file.copy(tempFile.path);
+        await Share.shareXFiles([XFile(tempFile.path, name: fileName)]);
+      } catch (_) {
+        await Share.shareXFiles([XFile(entry['filePath'])]);
+      }
     }
   }
 
