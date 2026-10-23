@@ -411,6 +411,8 @@ class _SavedPdfViewerScreen extends StatelessWidget {
         scaleEnabled: true,
         child: PdfPreview(
           build: (format) => file.readAsBytesSync(),
+          allowPrinting: false,
+          allowSharing: false,
           canChangeOrientation: false,
           canChangePageFormat: false,
           canDebug: false,

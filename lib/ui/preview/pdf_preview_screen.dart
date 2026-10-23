@@ -108,11 +108,27 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     }
   }
 
+  String _buildFileName() {
+    final clientOrBusiness = widget.report.businessName.isNotEmpty
+        ? widget.report.businessName
+        : widget.report.clientName;
+    final cleanClient = clientOrBusiness
+        .trim()
+        .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+    final cleanFolio = widget.report.reportFolio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+
+    return cleanClient.isNotEmpty
+        ? 'Reporte_${cleanFolio}_$cleanClient.pdf'
+        : 'Reporte_$cleanFolio.pdf';
+  }
+
   Future<void> _sharePdf() async {
     try {
       final pdfBytes = await PdfService.generateServiceReportPdf(widget.report);
       final tempDir = await getTemporaryDirectory();
-      final filePath = '${tempDir.path}/Reporte_${widget.report.reportFolio}.pdf';
+      final fileName = _buildFileName();
+      final filePath = '${tempDir.path}/$fileName';
       final file = File(filePath);
       await file.writeAsBytes(pdfBytes);
 
@@ -137,6 +153,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final fileName = _buildFileName();
 
     return Scaffold(
       appBar: AppBar(
@@ -174,11 +191,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         scaleEnabled: true,
         child: PdfPreview(
           build: (format) => PdfService.generateServiceReportPdf(widget.report),
+          allowPrinting: false,
+          allowSharing: false,
           canChangeOrientation: false,
           canChangePageFormat: false,
           canDebug: false,
           maxPageWidth: screenWidth, // Ajusta la página al ancho del dispositivo
-          pdfFileName: 'Reporte_${widget.report.reportFolio}.pdf',
+          pdfFileName: fileName,
           loadingWidget: const Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -191,6 +210,51 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, -3)),
+          ],
+        ),
+        child: SafeArea(
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    side: const BorderSide(color: Color(0xFF0F2B48)),
+                    foregroundColor: const Color(0xFF0F2B48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: const Icon(Icons.share, size: 20),
+                  label: const Text('Compartir PDF', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: _sharePdf,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    backgroundColor: _isSaved ? Colors.green.shade800 : const Color(0xFF0F2B48),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  icon: Icon(_isSaved ? Icons.check_circle : Icons.save_alt, size: 20),
+                  label: Text(
+                    _isSaved ? 'Guardado ✓' : 'Guardar en Historial',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: _isSaving ? null : _saveToHistory,
+                ),
+              ),
+            ],
           ),
         ),
       ),

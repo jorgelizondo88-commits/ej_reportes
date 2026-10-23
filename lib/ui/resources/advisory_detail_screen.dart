@@ -56,8 +56,8 @@ class AdvisoryDetailScreen extends StatelessWidget {
             maxScale: 3.5,
             child: PdfPreview(
               build: (format) => ResourcePdfService.generateAdvisoryPdf(notice),
-              allowPrinting: true,
-              allowSharing: true,
+              allowPrinting: false,
+              allowSharing: false,
               canChangePageFormat: false,
               canChangeOrientation: false,
               canDebug: false,

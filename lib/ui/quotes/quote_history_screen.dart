@@ -398,8 +398,8 @@ class _SavedQuoteViewerScreen extends StatelessWidget {
       ),
       body: PdfPreview(
         build: (format) => file.readAsBytesSync(),
-        allowPrinting: true,
-        allowSharing: true,
+        allowPrinting: false,
+        allowSharing: false,
         canChangePageFormat: false,
         canChangeOrientation: false,
       ),

@@ -112,12 +112,27 @@ class _QuotePreviewScreenState extends State<QuotePreviewScreen> {
     }
   }
 
+  String _buildFileName() {
+    final clientTitle = widget.quote.clientBusinessName.isNotEmpty
+        ? widget.quote.clientBusinessName
+        : widget.quote.clientContactName;
+    final cleanClient = clientTitle
+        .trim()
+        .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+    final cleanFolio = widget.quote.quoteFolio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+
+    return cleanClient.isNotEmpty
+        ? 'Cotizacion_${cleanFolio}_$cleanClient.pdf'
+        : 'Cotizacion_$cleanFolio.pdf';
+  }
+
   Future<void> _shareQuote() async {
     try {
       final pdfBytes = await QuotePdfService.generateQuotePdf(widget.quote);
       final tempDir = await getTemporaryDirectory();
-      final cleanFolio = widget.quote.quoteFolio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      final file = File('${tempDir.path}/$cleanFolio.pdf');
+      final fileName = _buildFileName();
+      final file = File('${tempDir.path}/$fileName');
       await file.writeAsBytes(pdfBytes);
 
       final clientTitle = widget.quote.clientBusinessName.isNotEmpty
@@ -141,6 +156,7 @@ class _QuotePreviewScreenState extends State<QuotePreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final fileName = _buildFileName();
 
     return Scaffold(
       appBar: AppBar(
@@ -179,13 +195,13 @@ class _QuotePreviewScreenState extends State<QuotePreviewScreen> {
         scaleEnabled: true,
         child: PdfPreview(
           build: (format) => QuotePdfService.generateQuotePdf(widget.quote),
-          allowPrinting: true,
-          allowSharing: true,
+          allowPrinting: false,
+          allowSharing: false,
           canChangePageFormat: false,
           canChangeOrientation: false,
           canDebug: false,
           maxPageWidth: screenWidth,
-          pdfFileName: 'Cotizacion_${widget.quote.quoteFolio}.pdf',
+          pdfFileName: fileName,
         ),
       ),
       bottomNavigationBar: Container(

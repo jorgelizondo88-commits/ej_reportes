@@ -115,12 +115,27 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
     }
   }
 
+  String _buildFileName() {
+    final clientTitle = widget.schedule.clientBusinessName.isNotEmpty
+        ? widget.schedule.clientBusinessName
+        : widget.schedule.clientContactName;
+    final cleanClient = clientTitle
+        .trim()
+        .replaceAll(RegExp(r'[^\wáéíóúÁÉÍÓÚñÑ\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_');
+    final cleanFolio = widget.schedule.folio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+
+    return cleanClient.isNotEmpty
+        ? 'Cronograma_${cleanFolio}_$cleanClient.pdf'
+        : 'Cronograma_$cleanFolio.pdf';
+  }
+
   Future<void> _shareSchedule() async {
     try {
       final pdfBytes = await SchedulePdfService.generateSchedulePdf(widget.schedule);
       final tempDir = await getTemporaryDirectory();
-      final cleanFolio = widget.schedule.folio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-      final file = File('${tempDir.path}/$cleanFolio.pdf');
+      final fileName = _buildFileName();
+      final file = File('${tempDir.path}/$fileName');
       await file.writeAsBytes(pdfBytes);
 
       final clientTitle = widget.schedule.clientBusinessName.isNotEmpty
@@ -144,6 +159,7 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final fileName = _buildFileName();
 
     return Scaffold(
       appBar: AppBar(
@@ -182,13 +198,13 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
         scaleEnabled: true,
         child: PdfPreview(
           build: (format) => SchedulePdfService.generateSchedulePdf(widget.schedule),
-          allowPrinting: true,
-          allowSharing: true,
+          allowPrinting: false,
+          allowSharing: false,
           canChangePageFormat: false,
           canChangeOrientation: false,
           canDebug: false,
           maxPageWidth: screenWidth,
-          pdfFileName: 'Cronograma_${widget.schedule.folio}.pdf',
+          pdfFileName: fileName,
         ),
       ),
       bottomNavigationBar: Container(
