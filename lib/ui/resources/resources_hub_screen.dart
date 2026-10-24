@@ -39,9 +39,11 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
 
   final List<String> _noticeCategories = [
     'Todos',
-    'Pólizas y Empresas',
+    'Pólizas e Industria',
+    'Comercios y Locales',
+    'Casa Habitación y Residencial',
+    'Restaurantes y Alimentos',
     'Oficinas y Corporativos',
-    'Restaurantes y Cocinas',
     'Almacenes y Bodegas',
     'Servicio Técnico',
   ];
