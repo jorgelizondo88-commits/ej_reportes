@@ -662,28 +662,31 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                     // Duración en Meses (Chips)
                     const Text('Vigencia del Contrato:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     const SizedBox(height: 6),
-                    Row(
-                      children: [1, 3, 6, 12].map((m) {
-                        final isSel = _durationMonths == m;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text('$m ${m == 1 ? 'Mes' : 'Meses'}${m == 12 ? ' (Anual)' : ''}'),
-                            selected: isSel,
-                            selectedColor: const Color(0xFF0F2B48),
-                            labelStyle: TextStyle(
-                              color: isSel ? Colors.white : const Color(0xFF0F2B48),
-                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [1, 3, 6, 12].map((m) {
+                          final isSel = _durationMonths == m;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text('$m ${m == 1 ? 'Mes' : 'Meses'}${m == 12 ? ' (Anual)' : ''}'),
+                              selected: isSel,
+                              selectedColor: const Color(0xFF0F2B48),
+                              labelStyle: TextStyle(
+                                color: isSel ? Colors.white : const Color(0xFF0F2B48),
+                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              onSelected: (val) {
+                                if (val) {
+                                  setState(() => _durationMonths = m);
+                                  _recalculateEndDateAndVisits();
+                                }
+                              },
                             ),
-                            onSelected: (val) {
-                              if (val) {
-                                setState(() => _durationMonths = m);
-                                _recalculateEndDateAndVisits();
-                              }
-                            },
-                          ),
-                        );
-                      }).toList(),
+                          );
+                        }).toList(),
+                      ),
                     ),
                     const SizedBox(height: 14),
 
@@ -1090,19 +1093,20 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Icon(icon, color: const Color(0xFF0F2B48), size: 22),
-                    const SizedBox(width: 8),
-                    Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48)),
-                    ),
-                  ],
+                Icon(icon, color: const Color(0xFF0F2B48), size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                if (action != null) action,
+                if (action != null) ...[
+                  const SizedBox(width: 6),
+                  action,
+                ],
               ],
             ),
             const Divider(height: 20),
