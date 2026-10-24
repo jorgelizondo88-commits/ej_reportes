@@ -10,6 +10,7 @@ import '../../models/contract_model.dart';
 import '../../services/client_service.dart';
 import '../../services/image_service.dart';
 import 'contract_preview_screen.dart';
+import 'contract_history_screen.dart';
 
 class ContractFormScreen extends StatefulWidget {
   const ContractFormScreen({super.key});
@@ -117,20 +118,112 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
   Future<void> _generateNextFolio() async {
     final prefs = await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_contractsHistoryKey);
-    int count = 1;
+    int maxNumber = 0;
 
     if (jsonString != null && jsonString.isNotEmpty) {
       try {
         final List<dynamic> list = jsonDecode(jsonString);
-        count = list.length + 1;
+        for (final item in list) {
+          final folioStr = item['folio']?.toString() ?? '';
+          final parts = folioStr.split('-');
+          if (parts.length >= 4) {
+            final num = int.tryParse(parts.last);
+            if (num != null && num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        }
       } catch (_) {}
     }
 
+    final counterFromPrefs = prefs.getInt('ej_contracts_folio_counter') ?? 0;
+    final nextNumber = (maxNumber > counterFromPrefs ? maxNumber : counterFromPrefs) + 1;
     final year = DateTime.now().year;
-    final folio = 'EJ-POL-$year-${count.toString().padLeft(4, '0')}';
+    final folio = 'EJ-POL-$year-${nextNumber.toString().padLeft(4, '0')}';
+
+    if (mounted) {
+      setState(() {
+        _folioController.text = folio;
+      });
+    }
+  }
+
+  void _resetFormFields() {
+    _clientNameController.clear();
+    _businessNameController.clear();
+    _rfcController.clear();
+    _addressController.clear();
+    _phoneController.clear();
+    _emailController.clear();
+    _repNameController.clear();
+    _repRoleController.clear();
+    _repPhoneController.clear();
+    _coveredAreasController.clear();
+    _costPerVisitController.clear();
+    _monthlyCostController.clear();
+    _totalContractCostController.clear();
+    _specialClausesController.clear();
+    _paymentTermsController.text = 'Pago los primeros 5 días hábiles de cada mes facturado';
+
     setState(() {
-      _folioController.text = folio;
+      _serviceType = 'Póliza Comercial / Industrial';
+      _durationMonths = 12;
+      _startDate = DateTime.now();
+      _visitFrequency = 'Mensual (1 visita/mes)';
+      _paymentMethod = 'Transferencia Electrónica';
+      _selectedPests.clear();
+      _selectedPests.addAll(['Cucarachas', 'Roedores', 'Rastreros en general']);
+      _ineFrontPath = null;
+      _ineBackPath = null;
+      _clientSignatureBytes = null;
     });
+
+    _recalculateEndDateAndVisits();
+    _generateNextFolio();
+  }
+
+  Future<void> _confirmClearForm() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Iniciar Nuevo Contrato?'),
+        content: const Text(
+          'Esto vaciará todos los campos para comenzar un contrato en blanco y asignará el siguiente folio consecutivo.\n\n(Los clientes guardados y el historial no se afectarán).',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Limpiar Todo'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      _resetFormFields();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF0F2B48),
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('Formulario listo para nuevo contrato. Folio: ${_folioController.text}'),
+              ],
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadSavedContractorSignature() async {
@@ -409,7 +502,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
     }
   }
 
-  void _onGenerateContract() {
+  Future<void> _onGenerateContract() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor completa los campos requeridos con asterisco (*).')),
@@ -462,9 +555,47 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
       signerFullName: _repNameController.text.trim().isNotEmpty ? _repNameController.text.trim() : _clientNameController.text.trim(),
     );
 
-    Navigator.push(
+    final wasSaved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (context) => ContractPreviewScreen(contract: contract)),
+    );
+
+    if (wasSaved == true) {
+      await _generateNextFolio();
+      if (!mounted) return;
+      _showContractSavedDialog(contract.folio);
+    }
+  }
+
+  void _showContractSavedDialog(String savedFolio) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.check_circle, color: Colors.green, size: 48),
+        title: const Text('¡Contrato Guardado!', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+          'El contrato con folio $savedFolio se guardó exitosamente en el historial.\n\nSe asignó automáticamente el siguiente folio consecutivo: ${_folioController.text}.\n\n¿Deseas vaciar los campos para comenzar un nuevo contrato?',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.spaceEvenly,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Mantener Datos'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F2B48),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _resetFormFields();
+            },
+            child: const Text('Vaciar Campos'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -482,6 +613,19 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
             icon: const Icon(Icons.people_alt_outlined),
             tooltip: 'Directorio de Clientes',
             onPressed: _selectClientFromDirectory,
+          ),
+          IconButton(
+            icon: const Icon(Icons.folder_shared_outlined),
+            tooltip: 'Historial de Contratos',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => ContractHistoryScreen()),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.cleaning_services),
+            tooltip: 'Limpiar / Nuevo Contrato',
+            onPressed: _confirmClearForm,
           ),
         ],
       ),

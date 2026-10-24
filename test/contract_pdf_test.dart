@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ej_reportes/models/contract_model.dart';
 import 'package:ej_reportes/services/contract_pdf_service.dart';
 
@@ -94,5 +95,38 @@ void main() {
     final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfString).length;
     print('DEBUG_PAGE_COUNT con INE y firmas: $pageCount');
     expect(pageCount, 2, reason: 'El contrato completo con INE y firmas debe caber en 2 páginas');
+  });
+
+  test('Folio consecutivo incrementa adecuadamente según historial', () async {
+    SharedPreferences.setMockInitialValues({
+      'ej_contracts_history_list': jsonEncode([
+        {'folio': 'EJ-POL-2026-0001'},
+        {'folio': 'EJ-POL-2026-0005'},
+      ]),
+      'ej_contracts_folio_counter': 5,
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString('ej_contracts_history_list');
+    int maxNumber = 0;
+    if (jsonString != null && jsonString.isNotEmpty) {
+      final List<dynamic> list = jsonDecode(jsonString);
+      for (final item in list) {
+        final folioStr = item['folio']?.toString() ?? '';
+        final parts = folioStr.split('-');
+        if (parts.length >= 4) {
+          final num = int.tryParse(parts.last);
+          if (num != null && num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      }
+    }
+    final counter = prefs.getInt('ej_contracts_folio_counter') ?? 0;
+    final nextNumber = (maxNumber > counter ? maxNumber : counter) + 1;
+    final year = DateTime.now().year;
+    final nextFolio = 'EJ-POL-$year-${nextNumber.toString().padLeft(4, '0')}';
+
+    expect(nextFolio, 'EJ-POL-$year-0006');
   });
 }

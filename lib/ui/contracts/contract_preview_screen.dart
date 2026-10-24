@@ -41,6 +41,11 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
 
   Future<void> _shareContract() async {
     try {
+      // Si aún no está guardado, guardarlo automáticamente al compartir
+      if (!_isSaved) {
+        await _saveContractToHistory(showSuccessSnackbar: false);
+      }
+
       final pdfBytes = await ContractPdfService.generateContractPdf(widget.contract);
       final fileName = _buildFileName();
 
@@ -66,11 +71,13 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
     }
   }
 
-  Future<void> _saveContractToHistory() async {
+  Future<void> _saveContractToHistory({bool showSuccessSnackbar = true}) async {
     if (_isSaved) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Este contrato ya se encuentra guardado en el historial.')),
-      );
+      if (showSuccessSnackbar && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Este contrato ya se encuentra guardado en el historial.')),
+        );
+      }
       return;
     }
 
@@ -108,23 +115,39 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
 
       await prefs.setString(_contractsHistoryKey, jsonEncode(list));
 
+      // Actualizar contador del folio consecutivo
+      try {
+        final parts = widget.contract.folio.split('-');
+        if (parts.length >= 4) {
+          final num = int.tryParse(parts.last);
+          if (num != null) {
+            final current = prefs.getInt('ej_contracts_folio_counter') ?? 0;
+            if (num > current) {
+              await prefs.setInt('ej_contracts_folio_counter', num);
+            }
+          }
+        }
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _isSaved = true;
           _isSaving = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.green,
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Contrato guardado correctamente en tu historial.'),
-              ],
+        if (showSuccessSnackbar) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Colors.green,
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('Contrato guardado correctamente en tu historial.'),
+                ],
+              ),
             ),
-          ),
-        );
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -143,6 +166,10 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context, _isSaved),
+        ),
         title: Text(
           'Contrato: ${widget.contract.folio}',
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -157,18 +184,25 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
           ),
         ],
       ),
-      body: InteractiveViewer(
-        minScale: 1.0,
-        maxScale: 3.5,
-        child: PdfPreview(
-          build: (format) => ContractPdfService.generateContractPdf(widget.contract),
-          allowPrinting: false,
-          allowSharing: false,
-          canChangeOrientation: false,
-          canChangePageFormat: false,
-          canDebug: false,
-          maxPageWidth: screenWidth,
-          pdfFileName: fileName,
+      body: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          Navigator.pop(context, _isSaved);
+        },
+        child: InteractiveViewer(
+          minScale: 1.0,
+          maxScale: 3.5,
+          child: PdfPreview(
+            build: (format) => ContractPdfService.generateContractPdf(widget.contract),
+            allowPrinting: false,
+            allowSharing: false,
+            canChangeOrientation: false,
+            canChangePageFormat: false,
+            canDebug: false,
+            maxPageWidth: screenWidth,
+            pdfFileName: fileName,
+          ),
         ),
       ),
       bottomNavigationBar: Container(
