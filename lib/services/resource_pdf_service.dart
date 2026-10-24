@@ -321,7 +321,7 @@ class ResourcePdfService {
                     pw.SizedBox(height: 2),
                     pw.Text(
                       notice.problemStatement,
-                      style: const pw.TextStyle(fontSize: 7.2, color: darkText, lineSpacing: 1.12),
+                      style: const pw.TextStyle(fontSize: 7.3, color: darkText, lineSpacing: 1.14),
                     ),
                   ],
                 ),
@@ -344,7 +344,7 @@ class ResourcePdfService {
                       child: pw.Text(
                         'MATRIZ OPERATIVA: ACCIÓN INCORRECTA HABITUAL vs. PROTOCOLO CORRECTO',
                         textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                        style: pw.TextStyle(fontSize: 7.3, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                       ),
                     ),
                     pw.Table(
@@ -359,11 +359,11 @@ class ResourcePdfService {
                           children: [
                             pw.Padding(
                               padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                              child: pw.Text('ACCIÓN INCORRECTA HABITUAL [X]', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: alertRed)),
+                              child: pw.Text('ACCIÓN INCORRECTA HABITUAL [X]', style: pw.TextStyle(fontSize: 7.1, fontWeight: pw.FontWeight.bold, color: alertRed)),
                             ),
                             pw.Padding(
                               padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                              child: pw.Text('PROTOCOLO CORRECTO DE LA EMPRESA [OK]', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF166534))),
+                              child: pw.Text('PROTOCOLO CORRECTO DE LA EMPRESA [OK]', style: pw.TextStyle(fontSize: 7.1, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF166534))),
                             ),
                           ],
                         ),
@@ -377,11 +377,11 @@ class ResourcePdfService {
                                     children: [
                                       pw.TextSpan(
                                         text: 'x  ',
-                                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: alertRed),
+                                        style: pw.TextStyle(fontSize: 7.1, fontWeight: pw.FontWeight.bold, color: alertRed),
                                       ),
                                       pw.TextSpan(
                                         text: item.badPractice,
-                                        style: const pw.TextStyle(fontSize: 7.0, color: darkText, lineSpacing: 1.1),
+                                        style: const pw.TextStyle(fontSize: 7.1, color: darkText, lineSpacing: 1.12),
                                       ),
                                     ],
                                   ),
@@ -394,11 +394,11 @@ class ResourcePdfService {
                                     children: [
                                       pw.TextSpan(
                                         text: '+  ',
-                                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF166534)),
+                                        style: pw.TextStyle(fontSize: 7.1, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF166534)),
                                       ),
                                       pw.TextSpan(
                                         text: item.goodPractice,
-                                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: darkText, lineSpacing: 1.1),
+                                        style: pw.TextStyle(fontSize: 7.1, fontWeight: pw.FontWeight.bold, color: darkText, lineSpacing: 1.12),
                                       ),
                                     ],
                                   ),
@@ -417,7 +417,7 @@ class ResourcePdfService {
               // Reglas Obligatorias para el Personal
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
                 decoration: pw.BoxDecoration(
                   color: lightBg,
                   borderRadius: pw.BorderRadius.circular(4),
@@ -431,15 +431,15 @@ class ResourcePdfService {
                       decoration: const pw.BoxDecoration(color: primaryColor),
                       child: pw.Text(
                         'REGLAS DE HIGIENE Y EXCLUSIÓN OBLIGATORIAS PARA EL PERSONAL',
-                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                        style: pw.TextStyle(fontSize: 7.3, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                       ),
                     ),
-                    pw.SizedBox(height: 3.5),
+                    pw.SizedBox(height: 3),
                     ...notice.mandatoryRules.asMap().entries.map((entry) {
                       final idx = entry.key + 1;
                       final text = entry.value;
                       return pw.Padding(
-                        padding: const pw.EdgeInsets.only(bottom: 2.5),
+                        padding: const pw.EdgeInsets.only(bottom: 2),
                         child: pw.Row(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
@@ -461,14 +461,54 @@ class ResourcePdfService {
                               child: pw.Text(
                                 text,
                                 style: pw.TextStyle(
-                                  fontSize: 7.2,
+                                  fontSize: 7.15,
                                   fontWeight: text.startsWith('PROHIBIDO') || text.startsWith('REGLA') || text.startsWith('ALIMENTO') || text.startsWith('COMEDORES') || text.startsWith('DESEMPAQUE')
                                       ? pw.FontWeight.bold
                                       : pw.FontWeight.normal,
                                   color: text.startsWith('PROHIBIDO') ? alertRed : darkText,
-                                  lineSpacing: 1.1,
+                                  lineSpacing: 1.12,
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 5),
+
+              // Medidas de Instalación, Exclusión Física y Mantenimiento
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
+                decoration: pw.BoxDecoration(
+                  color: lightBg,
+                  borderRadius: pw.BorderRadius.circular(4),
+                  border: pw.Border.all(color: borderColor, width: 0.5),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: const pw.BoxDecoration(color: primaryColor),
+                      child: pw.Text(
+                        'MEDIDAS DE INSTALACIÓN, EXCLUSIÓN FÍSICA Y MANTENIMIENTO',
+                        style: pw.TextStyle(fontSize: 7.3, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    ...notice.facilityRecommendations.map((tip) {
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 2),
+                        child: pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('* ', style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: secondaryColor)),
+                            pw.Expanded(
+                              child: pw.Text(tip, style: const pw.TextStyle(fontSize: 7.1, color: darkText, lineSpacing: 1.12)),
                             ),
                           ],
                         ),
@@ -500,7 +540,7 @@ class ResourcePdfService {
             children: [
               // Encabezado compacto Página 2
               _buildPageTwoHeader(logoImage, notice),
-              pw.SizedBox(height: 5),
+              pw.SizedBox(height: 6),
 
               // Cronograma y Fases Biológicas
               pw.Container(
@@ -518,7 +558,7 @@ class ResourcePdfService {
                       child: pw.Text(
                         'CRONOGRAMA Y FASES DE EVOLUCIÓN BIOLÓGICA DEL TRATAMIENTO',
                         textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                        style: pw.TextStyle(fontSize: 7.4, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                       ),
                     ),
                     pw.Table(
@@ -533,16 +573,16 @@ class ResourcePdfService {
                           decoration: const pw.BoxDecoration(color: lightBg),
                           children: [
                             pw.Padding(
-                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                              child: pw.Text('FASE / ETAPA', style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                              child: pw.Text('FASE / ETAPA', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                             ),
                             pw.Padding(
-                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                              child: pw.Text('TIEMPO', style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                              child: pw.Text('TIEMPO', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                             ),
                             pw.Padding(
-                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                              child: pw.Text('COMPORTAMIENTO Y EFECTIVIDAD TÉCNICA', style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                              child: pw.Text('COMPORTAMIENTO Y EFECTIVIDAD TÉCNICA', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                             ),
                           ],
                         ),
@@ -550,16 +590,16 @@ class ResourcePdfService {
                           return pw.TableRow(
                             children: [
                               pw.Padding(
-                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                                child: pw.Text(phase.phaseName, style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                child: pw.Text(phase.phaseName, style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                               ),
                               pw.Padding(
-                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                                child: pw.Text(phase.timeFrame, style: const pw.TextStyle(fontSize: 6.8, color: darkText)),
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                child: pw.Text(phase.timeFrame, style: const pw.TextStyle(fontSize: 7.0, color: darkText)),
                               ),
                               pw.Padding(
-                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
-                                child: pw.Text(phase.description, style: const pw.TextStyle(fontSize: 6.8, color: darkText, lineSpacing: 1.08)),
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                child: pw.Text(phase.description, style: const pw.TextStyle(fontSize: 7.0, color: darkText, lineSpacing: 1.1)),
                               ),
                             ],
                           );
@@ -569,52 +609,12 @@ class ResourcePdfService {
                   ],
                 ),
               ),
-              pw.SizedBox(height: 5),
-
-              // Medidas de Instalación, Exclusión Física y Mantenimiento
-              pw.Container(
-                width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
-                decoration: pw.BoxDecoration(
-                  color: lightBg,
-                  borderRadius: pw.BorderRadius.circular(4),
-                  border: pw.Border.all(color: borderColor, width: 0.5),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                      decoration: const pw.BoxDecoration(color: primaryColor),
-                      child: pw.Text(
-                        'MEDIDAS DE INSTALACIÓN, EXCLUSIÓN FÍSICA Y MANTENIMIENTO',
-                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    ...notice.facilityRecommendations.map((tip) {
-                      return pw.Padding(
-                        padding: const pw.EdgeInsets.only(bottom: 2),
-                        child: pw.Row(
-                          crossAxisAlignment: pw.CrossAxisAlignment.start,
-                          children: [
-                            pw.Text('* ', style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: secondaryColor)),
-                            pw.Expanded(
-                              child: pw.Text(tip, style: const pw.TextStyle(fontSize: 7.0, color: darkText, lineSpacing: 1.1)),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 5),
+              pw.SizedBox(height: 6),
 
               // Preguntas Frecuentes Técnicas (FAQ de Campo)
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
                 decoration: pw.BoxDecoration(
                   color: const PdfColor.fromInt(0xFFF8FAFC),
                   borderRadius: pw.BorderRadius.circular(4),
@@ -628,19 +628,19 @@ class ResourcePdfService {
                       decoration: const pw.BoxDecoration(color: secondaryColor),
                       child: pw.Text(
                         'PREGUNTAS FRECUENTES TÉCNICAS (FAQ DE CAMPO)',
-                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                        style: pw.TextStyle(fontSize: 7.4, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                       ),
                     ),
-                    pw.SizedBox(height: 3),
+                    pw.SizedBox(height: 3.5),
                     ...notice.faqs.map((faq) {
                       return pw.Padding(
-                        padding: const pw.EdgeInsets.only(bottom: 3),
+                        padding: const pw.EdgeInsets.only(bottom: 3.5),
                         child: pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
-                            pw.Text('P: ${faq.question}', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                            pw.Text('P: ${faq.question}', style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: primaryColor)),
                             pw.SizedBox(height: 1),
-                            pw.Text('R: ${faq.answer}', style: const pw.TextStyle(fontSize: 6.8, color: darkText, lineSpacing: 1.1)),
+                            pw.Text('R: ${faq.answer}', style: const pw.TextStyle(fontSize: 7.0, color: darkText, lineSpacing: 1.12)),
                           ],
                         ),
                       );
@@ -648,12 +648,12 @@ class ResourcePdfService {
                   ],
                 ),
               ),
-              pw.SizedBox(height: 5),
+              pw.SizedBox(height: 6),
 
               // Principio Técnico de Corresponsabilidad
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
                 decoration: pw.BoxDecoration(
                   color: const PdfColor.fromInt(0xFFFEF3C7),
                   borderRadius: pw.BorderRadius.circular(3),
@@ -665,7 +665,7 @@ class ResourcePdfService {
                     pw.Text(
                       'PRINCIPIO TÉCNICO: RESPONSABILIDAD COMPARTIDA Y TRABAJO EN EQUIPO',
                       style: pw.TextStyle(
-                        fontSize: 7.2,
+                        fontSize: 7.3,
                         fontWeight: pw.FontWeight.bold,
                         color: const PdfColor.fromInt(0xFF92400E),
                       ),
@@ -673,17 +673,17 @@ class ResourcePdfService {
                     pw.SizedBox(height: 1.5),
                     pw.Text(
                       notice.technicalDisclaimer,
-                      style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey900, lineSpacing: 1.1),
+                      style: const pw.TextStyle(fontSize: 7.0, color: PdfColors.grey900, lineSpacing: 1.12),
                     ),
                   ],
                 ),
               ),
-              pw.SizedBox(height: 5),
+              pw.SizedBox(height: 6),
 
               // Dictamen de Certificación y Firma Técnica
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: borderColor, width: 0.6),
                   borderRadius: pw.BorderRadius.circular(4),
@@ -697,16 +697,16 @@ class ResourcePdfService {
                       children: [
                         pw.Text(
                           'DICTAMEN Y PROTOCOLO CERTIFICADO POR:',
-                          style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: primaryColor),
+                          style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor),
                         ),
                         pw.SizedBox(height: 2),
                         pw.Text(
                           'ING. JORGE ELIZONDO / REP. TÉCNICO',
-                          style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: darkText),
+                          style: pw.TextStyle(fontSize: 8.2, fontWeight: pw.FontWeight.bold, color: darkText),
                         ),
                         pw.Text(
                           'Responsable de Operaciones y Bioseguridad  |  EJ Exterminadores',
-                          style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
+                          style: const pw.TextStyle(fontSize: 7.0, color: PdfColors.grey700),
                         ),
                       ],
                     ),
@@ -715,16 +715,16 @@ class ResourcePdfService {
                       children: [
                         pw.Text(
                           'ATENCIÓN Y ASESORÍA TÉCNICA:',
-                          style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: secondaryColor),
+                          style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: secondaryColor),
                         ),
                         pw.SizedBox(height: 2),
                         pw.Text(
                           'Tel. 813-175-9342',
-                          style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: primaryColor),
+                          style: pw.TextStyle(fontSize: 8.2, fontWeight: pw.FontWeight.bold, color: primaryColor),
                         ),
                         pw.Text(
                           'www.ejexterminadores.com  |  Monterrey, N.L.',
-                          style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
+                          style: const pw.TextStyle(fontSize: 7.0, color: PdfColors.grey700),
                         ),
                       ],
                     ),
