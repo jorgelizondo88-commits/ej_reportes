@@ -643,6 +643,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                     // Tipo de Póliza
                     DropdownButtonFormField<String>(
                       value: _serviceType,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: 'Tipo de Servicio',
                         isDense: true,
@@ -652,7 +653,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                         'Póliza Comercial / Industrial',
                         'Póliza Residencial',
                         'Servicio de Mantenimiento Específico',
-                      ].map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13)))).toList(),
+                      ].map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
                       onChanged: (val) {
                         if (val != null) setState(() => _serviceType = val);
                       },
@@ -740,6 +741,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                           flex: 3,
                           child: DropdownButtonFormField<String>(
                             value: _visitFrequency,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Frecuencia de Visita',
                               isDense: true,
@@ -750,7 +752,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                               'Quincenal (2 visitas/mes)',
                               'Mensual (1 visita/mes)',
                               'Bimestral (1 visita c/2 meses)',
-                            ].map((f) => DropdownMenuItem(value: f, child: Text(f, style: const TextStyle(fontSize: 12.5)))).toList(),
+                            ].map((f) => DropdownMenuItem(value: f, child: Text(f, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               if (val != null) {
                                 setState(() => _visitFrequency = val);
@@ -823,7 +825,29 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                 title: '3. Términos Económicos y Pago',
                 icon: Icons.payments_outlined,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F1F5),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF2E6F9E).withOpacity(0.3)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.monetization_on_outlined, size: 16, color: Color(0xFF0F2B48)),
+                          SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Todos los importes se estipulan en Pesos Mexicanos (\$ MXN).',
+                              style: TextStyle(fontSize: 11.5, color: Color(0xFF0F2B48), fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     Row(
                       children: [
                         Expanded(
@@ -831,7 +855,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                             controller: _costPerVisitController,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             decoration: const InputDecoration(
-                              labelText: 'Costo por Visita (\$)',
+                              labelText: 'Costo por Visita (\$ MXN)',
                               isDense: true,
                               border: OutlineInputBorder(),
                             ),
@@ -844,7 +868,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                             controller: _monthlyCostController,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             decoration: const InputDecoration(
-                              labelText: 'Costo Mensual (\$)',
+                              labelText: 'Costo Mensual (\$ MXN)',
                               isDense: true,
                               border: OutlineInputBorder(),
                             ),
@@ -860,7 +884,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                             controller: _totalContractCostController,
                             keyboardType: const TextInputType.numberWithOptions(decimal: true),
                             decoration: const InputDecoration(
-                              labelText: 'Valor Total Póliza (\$)',
+                              labelText: 'Valor Total Póliza (\$ MXN)',
                               isDense: true,
                               border: OutlineInputBorder(),
                             ),
@@ -870,6 +894,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                         Expanded(
                           child: DropdownButtonFormField<String>(
                             value: _paymentMethod,
+                            isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Método de Pago',
                               isDense: true,
@@ -880,7 +905,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                               'Efectivo',
                               'Tarjeta Bancaria',
                               'Cheque',
-                            ].map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12.5)))).toList(),
+                            ].map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               if (val != null) setState(() => _paymentMethod = val);
                             },
@@ -888,12 +913,60 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Condición comercial o Crédito para empresas:',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Color(0xFF0F2B48)),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        ActionChip(
+                          avatar: const Icon(Icons.timer_outlined, size: 15, color: Color(0xFF1E6091)),
+                          label: const Text('Crédito 15 días', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setState(() {
+                              _paymentTermsController.text = 'Crédito comercial a 15 días naturales tras recepción de factura';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.timer_outlined, size: 15, color: Color(0xFF1E6091)),
+                          label: const Text('Crédito 30 días', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setState(() {
+                              _paymentTermsController.text = 'Crédito comercial a 30 días naturales tras recepción de factura';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.check_circle_outline, size: 15, color: Color(0xFF2D6A4F)),
+                          label: const Text('Contra entrega', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setState(() {
+                              _paymentTermsController.text = 'Pago de contado contra entrega de servicio y reporte';
+                            });
+                          },
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.calendar_today_outlined, size: 15, color: Color(0xFF0F2B48)),
+                          label: const Text('Anticipado (1º-5º día)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            setState(() {
+                              _paymentTermsController.text = 'Pago anticipado los primeros 5 días naturales del mes facturado';
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     TextFormField(
                       controller: _paymentTermsController,
                       decoration: const InputDecoration(
-                        labelText: 'Esquema y Condiciones de Pago',
-                        hintText: 'Ej. Pago los primeros 5 días hábiles de cada mes facturado',
+                        labelText: 'Esquema y Condiciones de Pago / Crédito',
+                        hintText: 'Ej. Crédito comercial a 30 días tras entrega de factura',
                         isDense: true,
                         border: OutlineInputBorder(),
                       ),

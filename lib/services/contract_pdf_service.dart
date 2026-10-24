@@ -211,8 +211,8 @@ class ContractPdfService {
                 _buildTableRow('Tipo de Póliza:', contract.serviceType, 'Vigencia:', '${contract.durationMonths} Meses (${dateFormat.format(contract.startDate)} al ${dateFormat.format(contract.endDate)})'),
                 _buildTableRow('Frecuencia de Visitas:', contract.visitFrequency, 'Total de Servicios:', '${contract.totalVisits} visitas programadas'),
                 _buildTableRow('Áreas Comprendidas:', contract.coveredAreas.isNotEmpty ? contract.coveredAreas : 'Todas las instalaciones del inmueble', 'Plagas a Controlar:', contract.targetPests.isNotEmpty ? contract.targetPests.join(', ') : 'Rastreros, cucarachas y roedores'),
-                _buildTableRow('Costo por Servicio:', currencyFormat.format(contract.costPerVisit), 'Costo Mensual:', currencyFormat.format(contract.monthlyCost)),
-                _buildTableRow('Monto Total Póliza:', currencyFormat.format(contract.totalContractCost), 'Forma y Término de Pago:', '${contract.paymentMethod} - ${contract.paymentTerms}'),
+                _buildTableRow('Costo por Servicio:', '${currencyFormat.format(contract.costPerVisit)} MXN', 'Costo Mensual:', '${currencyFormat.format(contract.monthlyCost)} MXN'),
+                _buildTableRow('Monto Total Póliza:', '${currencyFormat.format(contract.totalContractCost)} MXN', 'Forma y Plazo de Pago:', '${contract.paymentMethod} - ${contract.paymentTerms}'),
               ],
             ),
             pw.SizedBox(height: 12),
@@ -232,8 +232,8 @@ class ContractPdfService {
             ),
 
             _buildClause(
-              'TERCERA. CONTRAPRESTACIÓN, FACTURACIÓN Y PAGO.-',
-              '"EL CLIENTE" se compromete a pagar a "EL PRESTADOR" la cantidad de ${currencyFormat.format(contract.monthlyCost)} M.N. mensual (o ${currencyFormat.format(contract.costPerVisit)} M.N. por servicio realizado), sumando un valor total contratado de ${currencyFormat.format(contract.totalContractCost)} M.N. El pago se efectuará mediante ${contract.paymentMethod.toLowerCase()} bajo el esquema de: "${contract.paymentTerms}". En caso de mora superior a 15 días, "EL PRESTADOR" se reserva el derecho de suspender temporalmente el calendario de visitas.',
+              'TERCERA. CONTRAPRESTACIÓN, MONEDA Y PLAZOS DE PAGO / CRÉDITO.-',
+              '"EL CLIENTE" se compromete a pagar a "EL PRESTADOR" las contraprestaciones estipuladas en Pesos Mexicanos (Moneda Nacional - M.N. / MXN) a razón de ${currencyFormat.format(contract.monthlyCost)} M.N. mensual (o ${currencyFormat.format(contract.costPerVisit)} M.N. por servicio realizado), sumando un valor total contratado de ${currencyFormat.format(contract.totalContractCost)} M.N. El pago se efectuará mediante ${contract.paymentMethod.toLowerCase()} bajo el esquema y plazos convenidos de: "${contract.paymentTerms}". Las partes acuerdan expresamente que en caso de haberse estipulado crédito comercial (15, 30 días naturales o el plazo pactado entre ambas partes), "EL CLIENTE" se obliga a liquidar la factura correspondiente dentro del periodo concedido a partir de la entrega del reporte de servicio o comprobante fiscal.',
             ),
 
             _buildClause(
