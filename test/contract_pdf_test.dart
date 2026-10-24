@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ej_reportes/models/contract_model.dart';
 import 'package:ej_reportes/services/contract_pdf_service.dart';
@@ -39,5 +41,58 @@ void main() {
 
     final pdfBytes = await ContractPdfService.generateContractPdf(contract);
     expect(pdfBytes.isNotEmpty, true, reason: 'El PDF del contrato no debe estar vacío');
+
+    final pdfString = String.fromCharCodes(pdfBytes);
+    final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfString).length;
+    print('DEBUG_PAGE_COUNT sin INE: $pageCount');
+    expect(pageCount, 2, reason: 'El contrato estándar debe caber exactamente en 2 páginas');
+  });
+
+  test('Contrato con INE y Firmas se mantiene en 2 páginas ejecutivas', () async {
+    const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+    final bytes = base64Decode(pngBase64);
+    final frontFile = File('/tmp/test_front_ine.png')..writeAsBytesSync(bytes);
+    final backFile = File('/tmp/test_back_ine.png')..writeAsBytesSync(bytes);
+
+    final contract = ContractModel(
+      id: 'test_ine',
+      folio: 'EJ-POL-2026-0002',
+      creationDate: DateTime.now(),
+      clientName: 'María Rodríguez',
+      businessName: 'Comercializadora Regia S.A.',
+      rfc: 'CRG190510ABC',
+      address: 'Parque Industrial Milimex, Apodaca, N.L.',
+      phone: '818-999-0011',
+      email: 'mrodriguez@comercializadora.com',
+      representativeName: 'María Rodríguez Salazar',
+      representativeRole: 'Directora General',
+      representativePhone: '818-999-0011',
+      ineFrontPath: frontFile.path,
+      ineBackPath: backFile.path,
+      serviceType: 'Póliza Comercial / Industrial',
+      durationMonths: 12,
+      startDate: DateTime(2026, 2, 1),
+      endDate: DateTime(2027, 1, 31),
+      visitFrequency: 'Quincenal (2 visitas/mes)',
+      totalVisits: 24,
+      targetPests: ['Cucarachas', 'Moscas', 'Roedores'],
+      coveredAreas: 'Área de embarque, comedor y oficinas',
+      costPerVisit: 1200.0,
+      monthlyCost: 2400.0,
+      totalContractCost: 28800.0,
+      paymentMethod: 'Transferencia Electrónica',
+      paymentTerms: 'Crédito comercial a 30 días naturales',
+      specialClauses: 'Nebulizaciones extraordinarias cubiertas ante contingencia.',
+      jurisdiction: 'Monterrey, Nuevo León',
+      signerFullName: 'María Rodríguez Salazar',
+      clientSignatureBytes: bytes,
+      contractorSignatureBytes: bytes,
+    );
+
+    final pdfBytes = await ContractPdfService.generateContractPdf(contract);
+    final pdfString = String.fromCharCodes(pdfBytes);
+    final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfString).length;
+    print('DEBUG_PAGE_COUNT con INE y firmas: $pageCount');
+    expect(pageCount, 2, reason: 'El contrato completo con INE y firmas debe caber en 2 páginas');
   });
 }

@@ -135,6 +135,9 @@ class ContractPdfService {
         header: (context) => _buildPageHeader(contract, logoImage, context),
         footer: (context) => _buildPageFooter(contract, context),
         build: (context) {
+          final bool isSameMonthlyCost = (contract.costPerVisit - contract.monthlyCost).abs() < 0.01 ||
+              (contract.visitFrequency.toLowerCase().contains('mensual') && !contract.visitFrequency.toLowerCase().contains('bi'));
+
           return [
             pw.SizedBox(height: 10),
 
@@ -211,8 +214,13 @@ class ContractPdfService {
                 _buildTableRow('Tipo de Póliza:', contract.serviceType, 'Vigencia:', '${contract.durationMonths} Meses (${dateFormat.format(contract.startDate)} al ${dateFormat.format(contract.endDate)})'),
                 _buildTableRow('Frecuencia de Visitas:', contract.visitFrequency, 'Total de Servicios:', '${contract.totalVisits} visitas programadas'),
                 _buildTableRow('Áreas Comprendidas:', contract.coveredAreas.isNotEmpty ? contract.coveredAreas : 'Todas las instalaciones del inmueble', 'Plagas a Controlar:', contract.targetPests.isNotEmpty ? contract.targetPests.join(', ') : 'Rastreros, cucarachas y roedores'),
-                _buildTableRow('Costo por Servicio:', '${currencyFormat.format(contract.costPerVisit)} MXN', 'Costo Mensual:', '${currencyFormat.format(contract.monthlyCost)} MXN'),
-                _buildTableRow('Monto Total Póliza:', '${currencyFormat.format(contract.totalContractCost)} MXN', 'Forma y Plazo de Pago:', '${contract.paymentMethod} - ${contract.paymentTerms}'),
+                if (isSameMonthlyCost) ...[
+                  _buildTableRow('Inversión Mensual:', '${currencyFormat.format(contract.monthlyCost)} MXN (1 visita/mes)', 'Monto Total Póliza:', '${currencyFormat.format(contract.totalContractCost)} MXN'),
+                  _buildTableRow('Forma de Pago:', contract.paymentMethod, 'Condiciones / Crédito:', contract.paymentTerms),
+                ] else ...[
+                  _buildTableRow('Costo por Servicio:', '${currencyFormat.format(contract.costPerVisit)} MXN', 'Facturación Mensual:', '${currencyFormat.format(contract.monthlyCost)} MXN'),
+                  _buildTableRow('Monto Total Póliza:', '${currencyFormat.format(contract.totalContractCost)} MXN', 'Forma y Plazo de Pago:', '${contract.paymentMethod} - ${contract.paymentTerms}'),
+                ],
               ],
             ),
             pw.SizedBox(height: 12),
@@ -233,7 +241,9 @@ class ContractPdfService {
 
             _buildClause(
               'TERCERA. CONTRAPRESTACIÓN, MONEDA Y PLAZOS DE PAGO / CRÉDITO.-',
-              '"EL CLIENTE" se compromete a pagar a "EL PRESTADOR" las contraprestaciones estipuladas en Pesos Mexicanos (Moneda Nacional - M.N. / MXN) a razón de ${currencyFormat.format(contract.monthlyCost)} M.N. mensual (o ${currencyFormat.format(contract.costPerVisit)} M.N. por servicio realizado), sumando un valor total contratado de ${currencyFormat.format(contract.totalContractCost)} M.N. El pago se efectuará mediante ${contract.paymentMethod.toLowerCase()} bajo el esquema y plazos convenidos de: "${contract.paymentTerms}". Las partes acuerdan expresamente que en caso de haberse estipulado crédito comercial (15, 30 días naturales o el plazo pactado entre ambas partes), "EL CLIENTE" se obliga a liquidar la factura correspondiente dentro del periodo concedido a partir de la entrega del reporte de servicio o comprobante fiscal.',
+              isSameMonthlyCost
+                  ? '"EL CLIENTE" se compromete a pagar a "EL PRESTADOR" las contraprestaciones estipuladas en Pesos Mexicanos (Moneda Nacional - M.N. / MXN) a razón de ${currencyFormat.format(contract.monthlyCost)} M.N. mensual por servicio calendarizado realizado, sumando un valor total contratado de ${currencyFormat.format(contract.totalContractCost)} M.N. El pago se efectuará mediante ${contract.paymentMethod.toLowerCase()} bajo el esquema y plazos convenidos de: "${contract.paymentTerms}". Las partes acuerdan expresamente que en caso de haberse estipulado crédito comercial (15, 30 días naturales o el plazo pactado entre ambas partes), "EL CLIENTE" se obliga a liquidar la factura correspondiente dentro del periodo concedido a partir de la entrega del reporte de servicio o comprobante fiscal.'
+                  : '"EL CLIENTE" se compromete a pagar a "EL PRESTADOR" las contraprestaciones estipuladas en Pesos Mexicanos (Moneda Nacional - M.N. / MXN) a razón de ${currencyFormat.format(contract.monthlyCost)} M.N. mensual (${currencyFormat.format(contract.costPerVisit)} M.N. por cada servicio ejecutado), sumando un valor total contratado de ${currencyFormat.format(contract.totalContractCost)} M.N. El pago se efectuará mediante ${contract.paymentMethod.toLowerCase()} bajo el esquema y plazos convenidos de: "${contract.paymentTerms}". Las partes acuerdan expresamente que en caso de haberse estipulado crédito comercial (15, 30 días naturales o el plazo pactado entre ambas partes), "EL CLIENTE" se obliga a liquidar la factura correspondiente dentro del periodo concedido a partir de la entrega del reporte de servicio o comprobante fiscal.',
             ),
 
             _buildClause(
@@ -274,11 +284,72 @@ class ContractPdfService {
               'NOVENA. JURISDICCIÓN Y COMPETENCIA.-',
               'Para la interpretación y cumplimiento del presente contrato, ambas partes se someten voluntariamente a las leyes aplicables y a la jurisdicción de los Tribunales Competentes de la ciudad de ${contract.jurisdiction}, renunciando a cualquier otro fuero que por razón de sus domicilios presentes o futuros pudiera corresponderles.',
             ),
-            pw.SizedBox(height: 16),
+            pw.SizedBox(height: 8),
 
-            // SECCIÓN DE FIRMAS DIGITALES
+            // ACREDITACIÓN DE IDENTIDAD: COTEJO DE CREDENCIAL (INE / IFE)
+            if (ineFrontImage != null || ineBackImage != null) ...[
+              _buildSectionHeader('IV. ACREDITACIÓN DE IDENTIDAD DEL FIRMANTE (COTEJO DE INE / IFE)'),
+              pw.SizedBox(height: 4),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+                children: [
+                  if (ineFrontImage != null)
+                    pw.Expanded(
+                      child: pw.Container(
+                        padding: const pw.EdgeInsets.all(5),
+                        decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: borderColor, width: 0.6),
+                          borderRadius: pw.BorderRadius.circular(4),
+                          color: lightBg,
+                        ),
+                        child: pw.Column(
+                          children: [
+                            pw.Text('FRENTE DE LA CREDENCIAL (INE)', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                            pw.SizedBox(height: 4),
+                            pw.Container(
+                              height: 85,
+                              child: pw.Image(ineFrontImage, fit: pw.BoxFit.contain),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (ineFrontImage != null && ineBackImage != null) pw.SizedBox(width: 10),
+                  if (ineBackImage != null)
+                    pw.Expanded(
+                      child: pw.Container(
+                        padding: const pw.EdgeInsets.all(5),
+                        decoration: pw.BoxDecoration(
+                          border: pw.Border.all(color: borderColor, width: 0.6),
+                          borderRadius: pw.BorderRadius.circular(4),
+                          color: lightBg,
+                        ),
+                        child: pw.Column(
+                          children: [
+                            pw.Text('REVERSO DE LA CREDENCIAL (INE)', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                            pw.SizedBox(height: 4),
+                            pw.Container(
+                              height: 85,
+                              child: pw.Image(ineBackImage, fit: pw.BoxFit.contain),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                '* Documento de identidad cotejado al momento de la firma electrónica, vinculado unívocamente al folio ${contract.folio}.',
+                style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.grey700),
+                textAlign: pw.TextAlign.center,
+              ),
+              pw.SizedBox(height: 8),
+            ],
+
+            // SECCIÓN DE FIRMAS DIGITALES AL CALCE
             pw.Container(
-              padding: const pw.EdgeInsets.all(10),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: pw.BoxDecoration(
                 border: pw.Border.all(color: borderColor, width: 0.8),
                 borderRadius: pw.BorderRadius.circular(6),
@@ -287,11 +358,11 @@ class ContractPdfService {
               child: pw.Column(
                 children: [
                   pw.Text(
-                    'EN CONSTANCIA DE CONFORMIDAD Y ACEPTACIÓN DE TODAS SUS CLÁUSULAS, LAS PARTES FIRMAN DIGITALMENTE EL PRESENTE INSTRUMENTO:',
+                    'EN CONSTANCIA DE CONFORMIDAD Y ACEPTACIÓN DE TODAS SUS CLÁUSULAS Y ACREDITACIÓN DE IDENTIDAD, LAS PARTES FIRMAN AL CALCE:',
                     textAlign: pw.TextAlign.center,
                     style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: primaryColor),
                   ),
-                  pw.SizedBox(height: 12),
+                  pw.SizedBox(height: 8),
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
@@ -301,7 +372,7 @@ class ContractPdfService {
                         child: pw.Column(
                           children: [
                             pw.Container(
-                              height: 65,
+                              height: 52,
                               alignment: pw.Alignment.center,
                               decoration: pw.BoxDecoration(
                                 border: pw.Border(bottom: pw.BorderSide(color: primaryColor, width: 1.2)),
@@ -310,33 +381,33 @@ class ContractPdfService {
                                   ? pw.Image(pw.MemoryImage(contract.clientSignatureBytes!), fit: pw.BoxFit.contain)
                                   : pw.Text('Firma Digital Registrada', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
                             ),
-                            pw.SizedBox(height: 4),
+                            pw.SizedBox(height: 3),
                             pw.Text(
                               contract.representativeName.isNotEmpty ? contract.representativeName : contract.clientName,
-                              style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: darkText),
+                              style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: darkText),
                               textAlign: pw.TextAlign.center,
                             ),
                             pw.Text(
                               contract.representativeRole.isNotEmpty ? contract.representativeRole : 'Representante Legal / Encargado',
-                              style: const pw.TextStyle(fontSize: 7.2, color: PdfColors.grey700),
+                              style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
                               textAlign: pw.TextAlign.center,
                             ),
                             pw.Text(
                               'POR: ${contract.businessName.isNotEmpty ? contract.businessName : contract.clientName}',
-                              style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: secondaryColor),
+                              style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: secondaryColor),
                               textAlign: pw.TextAlign.center,
                             ),
                           ],
                         ),
                       ),
-                      pw.SizedBox(width: 24),
+                      pw.SizedBox(width: 20),
 
                       // Firma Prestador
                       pw.Expanded(
                         child: pw.Column(
                           children: [
                             pw.Container(
-                              height: 65,
+                              height: 52,
                               alignment: pw.Alignment.center,
                               decoration: pw.BoxDecoration(
                                 border: pw.Border(bottom: pw.BorderSide(color: primaryColor, width: 1.2)),
@@ -345,20 +416,20 @@ class ContractPdfService {
                                   ? pw.Image(pw.MemoryImage(contract.contractorSignatureBytes!), fit: pw.BoxFit.contain)
                                   : pw.Text('Firma Autorizada', style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
                             ),
-                            pw.SizedBox(height: 4),
+                            pw.SizedBox(height: 3),
                             pw.Text(
                               'ING. JORGE LIZONDO / REP. TÉCNICO',
-                              style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: darkText),
+                              style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: darkText),
                               textAlign: pw.TextAlign.center,
                             ),
                             pw.Text(
                               'Responsable de Operaciones y Servicios',
-                              style: const pw.TextStyle(fontSize: 7.2, color: PdfColors.grey700),
+                              style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
                               textAlign: pw.TextAlign.center,
                             ),
                             pw.Text(
                               'POR: EJ EXTERMINADORES',
-                              style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: secondaryColor),
+                              style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: secondaryColor),
                               textAlign: pw.TextAlign.center,
                             ),
                           ],
@@ -369,94 +440,6 @@ class ContractPdfService {
                 ],
               ),
             ),
-
-            // ANEXO FOTOGRÁFICO DE LA IDENTIFICACIÓN (INE)
-            if (ineFrontImage != null || ineBackImage != null) ...[
-              pw.SizedBox(height: 18),
-              pw.NewPage(), // Salto de página para que el anexo de la credencial quede en su propia hoja ejecutiva limpia
-              pw.SizedBox(height: 10),
-
-              _buildSectionHeader('ANEXO A: COTEJO DE IDENTIFICACIÓN OFICIAL (INE / IFE)'),
-              pw.SizedBox(height: 6),
-              pw.Text(
-                'DOCUMENTO OFICIAL DIGITALIZADO DEL REPRESENTANTE LEGAL VINCULADO AL PRESENTE CONTRATO PARA EFECTOS DE IDENTIFICACIÓN Y NO REPUDIO:',
-                style: const pw.TextStyle(fontSize: 7.5, color: darkText),
-              ),
-              pw.SizedBox(height: 10),
-
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-                children: [
-                  if (ineFrontImage != null)
-                    pw.Expanded(
-                      child: pw.Container(
-                        padding: const pw.EdgeInsets.all(6),
-                        decoration: pw.BoxDecoration(
-                          border: pw.Border.all(color: borderColor, width: 0.8),
-                          borderRadius: pw.BorderRadius.circular(6),
-                          color: lightBg,
-                        ),
-                        child: pw.Column(
-                          children: [
-                            pw.Text('FRENTE DE LA CREDENCIAL (INE)', style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
-                            pw.SizedBox(height: 6),
-                            pw.Container(
-                              height: 155,
-                              child: pw.Image(ineFrontImage, fit: pw.BoxFit.contain),
-                            ),
-                            pw.SizedBox(height: 4),
-                            pw.Text('Cotejado al momento de la firma', style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey600)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (ineFrontImage != null && ineBackImage != null) pw.SizedBox(width: 14),
-                  if (ineBackImage != null)
-                    pw.Expanded(
-                      child: pw.Container(
-                        padding: const pw.EdgeInsets.all(6),
-                        decoration: pw.BoxDecoration(
-                          border: pw.Border.all(color: borderColor, width: 0.8),
-                          borderRadius: pw.BorderRadius.circular(6),
-                          color: lightBg,
-                        ),
-                        child: pw.Column(
-                          children: [
-                            pw.Text('REVERSO DE LA CREDENCIAL (INE)', style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
-                            pw.SizedBox(height: 6),
-                            pw.Container(
-                              height: 155,
-                              child: pw.Image(ineBackImage, fit: pw.BoxFit.contain),
-                            ),
-                            pw.SizedBox(height: 4),
-                            pw.Text('Cotejado al momento de la firma', style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey600)),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              pw.SizedBox(height: 12),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: pw.BoxDecoration(
-                  color: const PdfColor.fromInt(0xFFFEF3C7),
-                  borderRadius: pw.BorderRadius.circular(4),
-                  border: pw.Border.all(color: const PdfColor.fromInt(0xFFFCD34D), width: 0.8),
-                ),
-                child: pw.Row(
-                  children: [
-                    pw.Text('*  ', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: accentGold)),
-                    pw.Expanded(
-                      child: pw.Text(
-                        'CERTIFICACIÓN DE IDENTIDAD: La presente identificación oficial fue cotejada en presencia física del firmante y asociada unívocamente al folio contractual ${contract.folio}.',
-                        style: const pw.TextStyle(fontSize: 7.2, color: PdfColors.grey900),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ];
         },
       ),
