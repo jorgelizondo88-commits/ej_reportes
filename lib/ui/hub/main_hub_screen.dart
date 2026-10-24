@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/client_service.dart';
 import '../clients/clients_directory_screen.dart';
+import '../contracts/contract_form_screen.dart';
+import '../contracts/contract_history_screen.dart';
 import '../history/report_history_screen.dart';
 import '../home_screen.dart';
 import '../quotes/quote_form_screen.dart';
@@ -24,6 +26,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
   int _reportCount = 0;
   int _quoteCount = 0;
   int _scheduleCount = 0;
+  int _contractCount = 0;
 
   @override
   void initState() {
@@ -45,12 +48,16 @@ class _MainHubScreenState extends State<MainHubScreen> {
     final rawSchedules = prefs.getString('ej_schedules_history_list');
     final schedulesList = (rawSchedules != null && rawSchedules.isNotEmpty) ? jsonDecode(rawSchedules) : [];
 
+    final rawContracts = prefs.getString('ej_contracts_history_list');
+    final contractsList = (rawContracts != null && rawContracts.isNotEmpty) ? jsonDecode(rawContracts) : [];
+
     if (mounted) {
       setState(() {
         _clientCount = clients.length;
         _reportCount = reportsList.length;
         _quoteCount = quotesList.length;
         _scheduleCount = schedulesList.length;
+        _contractCount = contractsList.length;
       });
     }
   }
@@ -140,11 +147,13 @@ class _MainHubScreenState extends State<MainHubScreen> {
                     Row(
                       children: [
                         _metricBadge(Icons.description, '$_reportCount', 'Reportes'),
-                        const SizedBox(width: 6),
-                        _metricBadge(Icons.request_quote, '$_quoteCount', 'Cotizaciones'),
-                        const SizedBox(width: 6),
-                        _metricBadge(Icons.calendar_month, '$_scheduleCount', 'Pólizas'),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 4),
+                        _metricBadge(Icons.request_quote, '$_quoteCount', 'Cotiz.'),
+                        const SizedBox(width: 4),
+                        _metricBadge(Icons.calendar_month, '$_scheduleCount', 'Agendas'),
+                        const SizedBox(width: 4),
+                        _metricBadge(Icons.draw, '$_contractCount', 'Contratos'),
+                        const SizedBox(width: 4),
                         _metricBadge(Icons.people, '$_clientCount', 'Clientes'),
                       ],
                     ),
@@ -238,7 +247,34 @@ class _MainHubScreenState extends State<MainHubScreen> {
               ),
               const SizedBox(height: 14),
 
-              // 4. Tarjeta DIRECTORIO DE CLIENTES
+              // 4. Tarjeta PÓLIZAS Y CONTRATOS DIGITALES
+              _moduleCard(
+                icon: Icons.draw_outlined,
+                iconColor: Colors.indigo.shade800,
+                badgeText: _contractCount > 0 ? '$_contractCount registrados' : 'Legal',
+                badgeColor: Colors.indigo,
+                title: 'Pólizas y Contratos Digitales',
+                subtitle: 'Contratos legales de 1, 3, 6 o 12 meses con firma en pantalla (S-Pen), cotejo fotográfico de INE y PDF oficial.',
+                primaryButtonText: 'Nueva Póliza / Contrato',
+                onPrimaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ContractFormScreen()),
+                  );
+                  _loadMetrics();
+                },
+                secondaryButtonText: 'Historial de Contratos',
+                onSecondaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ContractHistoryScreen()),
+                  );
+                  _loadMetrics();
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 5. Tarjeta DIRECTORIO DE CLIENTES
               _moduleCard(
                 icon: Icons.people_alt_outlined,
                 iconColor: Colors.teal.shade800,
