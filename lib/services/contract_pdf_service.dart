@@ -418,7 +418,7 @@ class ContractPdfService {
                             ),
                             pw.SizedBox(height: 3),
                             pw.Text(
-                              'ING. JORGE LIZONDO / REP. TÉCNICO',
+                              'ING. JORGE ELIZONDO / REP. TÉCNICO',
                               style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: darkText),
                               textAlign: pw.TextAlign.center,
                             ),
