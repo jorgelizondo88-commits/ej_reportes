@@ -235,7 +235,7 @@ class ResourcePdfService {
   }
 
   // ==========================================
-  // 2. GENERADOR DE AVISO / COMUNICADO OFICIAL
+  // 2. GENERADOR DE AVISO / COMUNICADO OFICIAL (DOSSIER EJECUTIVO DE 2 PÁGINAS)
   // ==========================================
   static Future<Uint8List> generateAdvisoryPdf(AdvisoryNoticeModel notice) async {
     final pdf = pw.Document();
@@ -243,7 +243,7 @@ class ResourcePdfService {
 
     final pageTheme = pw.PageTheme(
       pageFormat: PdfPageFormat.letter,
-      margin: const pw.EdgeInsets.symmetric(horizontal: 26, vertical: 20),
+      margin: const pw.EdgeInsets.symmetric(horizontal: 26, vertical: 18),
       theme: pw.ThemeData.withFont(
         base: pw.Font.helvetica(),
         bold: pw.Font.helveticaBold(),
@@ -251,6 +251,9 @@ class ResourcePdfService {
       ),
     );
 
+    // ------------------------------------------
+    // PÁGINA 1: DIAGNÓSTICO, MATRIZ Y REGLAS
+    // ------------------------------------------
     pdf.addPage(
       pw.Page(
         pageTheme: pageTheme,
@@ -258,51 +261,163 @@ class ResourcePdfService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Encabezado
+              // Encabezado Página 1
               _buildHeader(
                 logoImage: logoImage,
                 documentType: 'COMUNICADO OFICIAL DE MANEJO INTEGRADO DE PLAGAS',
                 title: notice.title,
                 subtitle: 'Dirigido a: ${notice.targetAudience}',
                 badge1: notice.category,
-                badge2: 'Protocolo de Higiene y Exclusión',
+                badge2: 'Bioseguridad y Exclusión',
               ),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 5),
 
-              // Objetivo y Problemática
+              // Marco Normativo Oficial
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 5.5),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                decoration: pw.BoxDecoration(
+                  color: const PdfColor.fromInt(0xFFEEF2FF),
+                  borderRadius: pw.BorderRadius.circular(3),
+                  border: pw.Border.all(color: const PdfColor.fromInt(0xFFA5B4FC), width: 0.6),
+                ),
+                child: pw.Row(
+                  children: [
+                    pw.Text(
+                      'MARCO NORMATIVO Y SANITARIO: ',
+                      style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF3730A3)),
+                    ),
+                    pw.Expanded(
+                      child: pw.Text(
+                        notice.regulatoryFramework,
+                        style: const pw.TextStyle(fontSize: 7.2, color: darkText),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 5),
+
+              // Diagnóstico y Problemática
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
                 decoration: pw.BoxDecoration(
                   color: alertBg,
-                  borderRadius: pw.BorderRadius.circular(4),
-                  border: pw.Border.all(color: const PdfColor.fromInt(0xFFFEB2B2), width: 0.8),
+                  borderRadius: pw.BorderRadius.circular(3),
+                  border: pw.Border.all(color: const PdfColor.fromInt(0xFFFEB2B2), width: 0.6),
                 ),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      'DIAGNÓSTICO Y PROBLEMÁTICA OBSERVADA:',
+                      'DIAGNÓSTICO SANITARIO Y PROBLEMÁTICA OBSERVADA:',
                       style: pw.TextStyle(
-                        fontSize: 8.0,
+                        fontSize: 7.5,
                         fontWeight: pw.FontWeight.bold,
                         color: alertRed,
                       ),
                     ),
-                    pw.SizedBox(height: 2.5),
+                    pw.SizedBox(height: 2),
                     pw.Text(
                       notice.problemStatement,
-                      style: const pw.TextStyle(fontSize: 7.6, color: darkText, lineSpacing: 1.15),
+                      style: const pw.TextStyle(fontSize: 7.2, color: darkText, lineSpacing: 1.12),
                     ),
                   ],
                 ),
               ),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 5),
+
+              // Matriz de Buenas Prácticas (Incorrecto vs Correcto)
+              pw.Container(
+                width: double.infinity,
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: borderColor, width: 0.6),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
+                      color: primaryColor,
+                      child: pw.Text(
+                        'MATRIZ OPERATIVA: ACCIÓN INCORRECTA HABITUAL vs. PROTOCOLO CORRECTO',
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                      ),
+                    ),
+                    pw.Table(
+                      columnWidths: const {
+                        0: pw.FlexColumnWidth(1),
+                        1: pw.FlexColumnWidth(1),
+                      },
+                      border: pw.TableBorder.symmetric(inside: const pw.BorderSide(color: borderColor, width: 0.5)),
+                      children: [
+                        pw.TableRow(
+                          decoration: const pw.BoxDecoration(color: lightBg),
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              child: pw.Text('ACCIÓN INCORRECTA HABITUAL [X]', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: alertRed)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              child: pw.Text('PROTOCOLO CORRECTO DE LA EMPRESA [OK]', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF166534))),
+                            ),
+                          ],
+                        ),
+                        ...notice.dosAndDonts.map((item) {
+                          return pw.TableRow(
+                            children: [
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                child: pw.RichText(
+                                  text: pw.TextSpan(
+                                    children: [
+                                      pw.TextSpan(
+                                        text: 'x  ',
+                                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: alertRed),
+                                      ),
+                                      pw.TextSpan(
+                                        text: item.badPractice,
+                                        style: const pw.TextStyle(fontSize: 7.0, color: darkText, lineSpacing: 1.1),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                child: pw.RichText(
+                                  text: pw.TextSpan(
+                                    children: [
+                                      pw.TextSpan(
+                                        text: '+  ',
+                                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: const PdfColor.fromInt(0xFF166534)),
+                                      ),
+                                      pw.TextSpan(
+                                        text: item.goodPractice,
+                                        style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: darkText, lineSpacing: 1.1),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 5),
 
               // Reglas Obligatorias para el Personal
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 5),
                 decoration: pw.BoxDecoration(
                   color: lightBg,
                   borderRadius: pw.BorderRadius.circular(4),
@@ -312,25 +427,25 @@ class ResourcePdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                       decoration: const pw.BoxDecoration(color: primaryColor),
                       child: pw.Text(
-                        'REGLAS DE HIGIENE Y TRABAJO EN EQUIPO OBLIGATORIO',
-                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                        'REGLAS DE HIGIENE Y EXCLUSIÓN OBLIGATORIAS PARA EL PERSONAL',
+                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                       ),
                     ),
-                    pw.SizedBox(height: 4.5),
+                    pw.SizedBox(height: 3.5),
                     ...notice.mandatoryRules.asMap().entries.map((entry) {
                       final idx = entry.key + 1;
                       final text = entry.value;
                       return pw.Padding(
-                        padding: const pw.EdgeInsets.only(bottom: 3.0),
+                        padding: const pw.EdgeInsets.only(bottom: 2.5),
                         child: pw.Row(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
                             pw.Container(
-                              width: 13,
-                              height: 13,
+                              width: 12,
+                              height: 12,
                               alignment: pw.Alignment.center,
                               decoration: const pw.BoxDecoration(
                                 color: primaryColor,
@@ -338,20 +453,20 @@ class ResourcePdfService {
                               ),
                               child: pw.Text(
                                 '$idx',
-                                style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                                style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                               ),
                             ),
-                            pw.SizedBox(width: 5.5),
+                            pw.SizedBox(width: 5),
                             pw.Expanded(
                               child: pw.Text(
                                 text,
                                 style: pw.TextStyle(
-                                  fontSize: 7.6,
+                                  fontSize: 7.2,
                                   fontWeight: text.startsWith('PROHIBIDO') || text.startsWith('REGLA') || text.startsWith('ALIMENTO') || text.startsWith('COMEDORES') || text.startsWith('DESEMPAQUE')
                                       ? pw.FontWeight.bold
                                       : pw.FontWeight.normal,
                                   color: text.startsWith('PROHIBIDO') ? alertRed : darkText,
-                                  lineSpacing: 1.12,
+                                  lineSpacing: 1.1,
                                 ),
                               ),
                             ),
@@ -362,12 +477,104 @@ class ResourcePdfService {
                   ],
                 ),
               ),
-              pw.SizedBox(height: 6),
 
-              // Medidas de Instalaciones y Limpieza
+              pw.Spacer(),
+
+              // Pie de página 1
+              _buildFooterWithPage(1, 2),
+            ],
+          );
+        },
+      ),
+    );
+
+    // ------------------------------------------
+    // PÁGINA 2: BIOLOGÍA, FAQ Y CERTIFICACIÓN
+    // ------------------------------------------
+    pdf.addPage(
+      pw.Page(
+        pageTheme: pageTheme,
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Encabezado compacto Página 2
+              _buildPageTwoHeader(logoImage, notice),
+              pw.SizedBox(height: 5),
+
+              // Cronograma y Fases Biológicas
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: borderColor, width: 0.6),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
+                      color: secondaryColor,
+                      child: pw.Text(
+                        'CRONOGRAMA Y FASES DE EVOLUCIÓN BIOLÓGICA DEL TRATAMIENTO',
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                      ),
+                    ),
+                    pw.Table(
+                      border: pw.TableBorder.symmetric(inside: const pw.BorderSide(color: borderColor, width: 0.5)),
+                      columnWidths: const {
+                        0: pw.FlexColumnWidth(2.2),
+                        1: pw.FlexColumnWidth(1.4),
+                        2: pw.FlexColumnWidth(4.4),
+                      },
+                      children: [
+                        pw.TableRow(
+                          decoration: const pw.BoxDecoration(color: lightBg),
+                          children: [
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                              child: pw.Text('FASE / ETAPA', style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                              child: pw.Text('TIEMPO', style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                            ),
+                            pw.Padding(
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                              child: pw.Text('COMPORTAMIENTO Y EFECTIVIDAD TÉCNICA', style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                            ),
+                          ],
+                        ),
+                        ...notice.biologicalPhases.map((phase) {
+                          return pw.TableRow(
+                            children: [
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                                child: pw.Text(phase.phaseName, style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                              ),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                                child: pw.Text(phase.timeFrame, style: const pw.TextStyle(fontSize: 6.8, color: darkText)),
+                              ),
+                              pw.Padding(
+                                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+                                child: pw.Text(phase.description, style: const pw.TextStyle(fontSize: 6.8, color: darkText, lineSpacing: 1.08)),
+                              ),
+                            ],
+                          );
+                        }),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 5),
+
+              // Medidas de Instalación, Exclusión Física y Mantenimiento
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
                 decoration: pw.BoxDecoration(
                   color: lightBg,
                   borderRadius: pw.BorderRadius.circular(4),
@@ -377,23 +584,23 @@ class ResourcePdfService {
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: const pw.BoxDecoration(color: secondaryColor),
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: const pw.BoxDecoration(color: primaryColor),
                       child: pw.Text(
                         'MEDIDAS DE INSTALACIÓN, EXCLUSIÓN FÍSICA Y MANTENIMIENTO',
-                        style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                       ),
                     ),
-                    pw.SizedBox(height: 4.5),
+                    pw.SizedBox(height: 3),
                     ...notice.facilityRecommendations.map((tip) {
                       return pw.Padding(
-                        padding: const pw.EdgeInsets.only(bottom: 2.5),
+                        padding: const pw.EdgeInsets.only(bottom: 2),
                         child: pw.Row(
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           children: [
-                            pw.Text('  *  ', style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: secondaryColor)),
+                            pw.Text('* ', style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: secondaryColor)),
                             pw.Expanded(
-                              child: pw.Text(tip, style: const pw.TextStyle(fontSize: 7.6, color: darkText, lineSpacing: 1.12)),
+                              child: pw.Text(tip, style: const pw.TextStyle(fontSize: 7.0, color: darkText, lineSpacing: 1.1)),
                             ),
                           ],
                         ),
@@ -402,16 +609,55 @@ class ResourcePdfService {
                   ],
                 ),
               ),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 5),
 
-              // Cuadro de Responsabilidad Compartida y Deslinde
+              // Preguntas Frecuentes Técnicas (FAQ de Campo)
               pw.Container(
                 width: double.infinity,
-                padding: const pw.EdgeInsets.symmetric(horizontal: 9, vertical: 5.5),
+                padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
                 decoration: pw.BoxDecoration(
-                  color: const PdfColor.fromInt(0xFFFEF3C7), // Ámbar suave
+                  color: const PdfColor.fromInt(0xFFF8FAFC),
                   borderRadius: pw.BorderRadius.circular(4),
-                  border: pw.Border.all(color: const PdfColor.fromInt(0xFFFCD34D), width: 0.8),
+                  border: pw.Border.all(color: borderColor, width: 0.5),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                      decoration: const pw.BoxDecoration(color: secondaryColor),
+                      child: pw.Text(
+                        'PREGUNTAS FRECUENTES TÉCNICAS (FAQ DE CAMPO)',
+                        style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                      ),
+                    ),
+                    pw.SizedBox(height: 3),
+                    ...notice.faqs.map((faq) {
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.only(bottom: 3),
+                        child: pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Text('P: ${faq.question}', style: pw.TextStyle(fontSize: 7.0, fontWeight: pw.FontWeight.bold, color: primaryColor)),
+                            pw.SizedBox(height: 1),
+                            pw.Text('R: ${faq.answer}', style: const pw.TextStyle(fontSize: 6.8, color: darkText, lineSpacing: 1.1)),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 5),
+
+              // Principio Técnico de Corresponsabilidad
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: pw.BoxDecoration(
+                  color: const PdfColor.fromInt(0xFFFEF3C7),
+                  borderRadius: pw.BorderRadius.circular(3),
+                  border: pw.Border.all(color: const PdfColor.fromInt(0xFFFCD34D), width: 0.6),
                 ),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -419,15 +665,68 @@ class ResourcePdfService {
                     pw.Text(
                       'PRINCIPIO TÉCNICO: RESPONSABILIDAD COMPARTIDA Y TRABAJO EN EQUIPO',
                       style: pw.TextStyle(
-                        fontSize: 8.0,
+                        fontSize: 7.2,
                         fontWeight: pw.FontWeight.bold,
                         color: const PdfColor.fromInt(0xFF92400E),
                       ),
                     ),
-                    pw.SizedBox(height: 2.5),
+                    pw.SizedBox(height: 1.5),
                     pw.Text(
                       notice.technicalDisclaimer,
-                      style: const pw.TextStyle(fontSize: 7.6, color: PdfColors.grey900, lineSpacing: 1.15),
+                      style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey900, lineSpacing: 1.1),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(height: 5),
+
+              // Dictamen de Certificación y Firma Técnica
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: borderColor, width: 0.6),
+                  borderRadius: pw.BorderRadius.circular(4),
+                  color: lightBg,
+                ),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'DICTAMEN Y PROTOCOLO CERTIFICADO POR:',
+                          style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: primaryColor),
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          'ING. JORGE ELIZONDO / REP. TÉCNICO',
+                          style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: darkText),
+                        ),
+                        pw.Text(
+                          'Responsable de Operaciones y Bioseguridad  |  EJ Exterminadores',
+                          style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
+                        ),
+                      ],
+                    ),
+                    pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.end,
+                      children: [
+                        pw.Text(
+                          'ATENCIÓN Y ASESORÍA TÉCNICA:',
+                          style: pw.TextStyle(fontSize: 6.5, fontWeight: pw.FontWeight.bold, color: secondaryColor),
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          'Tel. 813-175-9342',
+                          style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: primaryColor),
+                        ),
+                        pw.Text(
+                          'www.ejexterminadores.com  |  Monterrey, N.L.',
+                          style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -435,8 +734,8 @@ class ResourcePdfService {
 
               pw.Spacer(),
 
-              // Pie de página institucional
-              _buildFooter(),
+              // Pie de página 2
+              _buildFooterWithPage(2, 2),
             ],
           );
         },
@@ -449,6 +748,74 @@ class ResourcePdfService {
   // ==========================================
   // WIDGETS AUXILIARES
   // ==========================================
+  static pw.Widget _buildPageTwoHeader(pw.ImageProvider? logoImage, AdvisoryNoticeModel notice) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(bottom: 5),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: primaryColor, width: 1.5)),
+      ),
+      child: pw.Row(
+        children: [
+          if (logoImage != null) ...[
+            pw.Container(
+              width: 30,
+              height: 30,
+              child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+            ),
+            pw.SizedBox(width: 8),
+          ],
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'EJ EXTERMINADORES   |   PROTOCOLO TÉCNICO COMPLEMENTARIO',
+                  style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: secondaryColor),
+                ),
+                pw.Text(
+                  notice.title,
+                  style: pw.TextStyle(fontSize: 9.0, fontWeight: pw.FontWeight.bold, color: primaryColor),
+                ),
+              ],
+            ),
+          ),
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: pw.BoxDecoration(
+              color: secondaryColor,
+              borderRadius: pw.BorderRadius.circular(3),
+            ),
+            child: pw.Text(
+              'Página 2: Biología y Validación',
+              style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildFooterWithPage(int currentPage, int totalPages) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(top: 5),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(top: pw.BorderSide(color: borderColor, width: 0.5)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'EJ Exterminadores   |   Tel. 813-175-9342   |   www.ejexterminadores.com',
+            style: const pw.TextStyle(fontSize: 7.2, color: PdfColors.grey700),
+          ),
+          pw.Text(
+            'Página $currentPage de $totalPages',
+            style: pw.TextStyle(fontSize: 7.2, fontWeight: pw.FontWeight.bold, color: primaryColor),
+          ),
+        ],
+      ),
+    );
+  }
   static pw.Widget _buildHeader({
     required pw.ImageProvider? logoImage,
     required String documentType,
