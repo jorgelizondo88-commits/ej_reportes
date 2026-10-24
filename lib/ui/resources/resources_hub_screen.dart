@@ -35,6 +35,17 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
     'Estructurales',
   ];
 
+  String _selectedNoticeCategory = 'Todos';
+
+  final List<String> _noticeCategories = [
+    'Todos',
+    'Pólizas y Empresas',
+    'Oficinas y Corporativos',
+    'Restaurantes y Cocinas',
+    'Almacenes y Bodegas',
+    'Servicio Técnico',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +69,13 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
       final matchesCategory = _selectedCategory == 'Todos' || p.category == _selectedCategory;
 
       return matchesQuery && matchesCategory;
+    }).toList();
+  }
+
+  List<AdvisoryNoticeModel> get _filteredNotices {
+    return _allNotices.where((n) {
+      final matchesCategory = _selectedNoticeCategory == 'Todos' || n.category == _selectedNoticeCategory;
+      return matchesCategory;
     }).toList();
   }
 
@@ -295,110 +313,174 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
 
   // --- TAB 2: AVISOS Y BUENAS PRÁCTICAS ---
   Widget _buildNoticesTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: _allNotices.length,
-      itemBuilder: (context, idx) {
-        final notice = _allNotices[idx];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 1.5,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AdvisoryDetailScreen(notice: notice)),
+    final filtered = _filteredNotices;
+
+    return Column(
+      children: [
+        // Selector horizontal de categorías
+        SizedBox(
+          height: 48,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            scrollDirection: Axis.horizontal,
+            itemCount: _noticeCategories.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, idx) {
+              final cat = _noticeCategories[idx];
+              final isSelected = cat == _selectedNoticeCategory;
+              return ChoiceChip(
+                label: Text(
+                  cat,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? Colors.white : const Color(0xFF0F2B48),
+                  ),
+                ),
+                selected: isSelected,
+                selectedColor: const Color(0xFF0F2B48),
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: isSelected ? const Color(0xFF0F2B48) : Colors.grey.shade300,
+                  ),
+                ),
+                showCheckmark: false,
+                onSelected: (val) {
+                  if (val) {
+                    setState(() => _selectedNoticeCategory = cat);
+                  }
+                },
               );
             },
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F2B48).withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(notice.iconEmoji, style: const TextStyle(fontSize: 22)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              notice.title,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F2B48)),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              notice.targetAudience,
-                              style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    notice.problemStatement,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade800, height: 1.25),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _badge(notice.category, const Color(0xFF1E6091)),
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
-                              side: const BorderSide(color: Color(0xFF0F2B48)),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            ),
-                            icon: const Icon(Icons.share, size: 15, color: Color(0xFF0F2B48)),
-                            label: const Text('Compartir PDF', style: TextStyle(fontSize: 11, color: Color(0xFF0F2B48))),
-                            onPressed: () => _quickShareNoticePdf(notice),
-                          ),
-                          const SizedBox(width: 6),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0F2B48),
-                              foregroundColor: Colors.white,
-                              visualDensity: VisualDensity.compact,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => AdvisoryDetailScreen(notice: notice)),
-                              );
-                            },
-                            child: const Text('Ver', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           ),
-        );
-      },
+        ),
+        const SizedBox(height: 4),
+
+        // Lista de comunicados
+        Expanded(
+          child: filtered.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.folder_open, size: 48, color: Colors.grey.shade400),
+                      const SizedBox(height: 10),
+                      Text(
+                        'No hay comunicados en la categoría "$_selectedNoticeCategory"',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, idx) {
+                    final notice = filtered[idx];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 1.5,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => AdvisoryDetailScreen(notice: notice)),
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    width: 44,
+                                    height: 44,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F2B48).withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(notice.iconEmoji, style: const TextStyle(fontSize: 22)),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          notice.title,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F2B48)),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          notice.targetAudience,
+                                          style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                notice.problemStatement,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade800, height: 1.25),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _badge(notice.category, const Color(0xFF1E6091)),
+                                  Row(
+                                    children: [
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          visualDensity: VisualDensity.compact,
+                                          side: const BorderSide(color: Color(0xFF0F2B48)),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        ),
+                                        icon: const Icon(Icons.share, size: 15, color: Color(0xFF0F2B48)),
+                                        label: const Text('Compartir PDF', style: TextStyle(fontSize: 11, color: Color(0xFF0F2B48))),
+                                        onPressed: () => _quickShareNoticePdf(notice),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF0F2B48),
+                                          foregroundColor: Colors.white,
+                                          visualDensity: VisualDensity.compact,
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                        ),
+                                        onPressed: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (context) => AdvisoryDetailScreen(notice: notice)),
+                                          );
+                                        },
+                                        child: const Text('Ver', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 

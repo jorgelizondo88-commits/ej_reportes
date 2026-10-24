@@ -25,7 +25,56 @@ class AdvisoryNoticeModel {
 
   static List<AdvisoryNoticeModel> getAllNotices() {
     return const [
-      // 1. OFICINAS Y CAJONES DE COMIDA
+      // 1. INDUCCIÓN A NUEVA PÓLIZA Y PROCESO DE CONTROL
+      AdvisoryNoticeModel(
+        id: 'induccion_nueva_poliza',
+        title: 'Inicio de Póliza: Inducción al Control de Plagas y Curva de Efectividad',
+        category: 'Pólizas y Empresas',
+        targetAudience: 'Directivos, Gerencias de Operaciones, Comités de Calidad y Personal',
+        iconEmoji: '🤝',
+        objective: 'Explicar con claridad técnica el funcionamiento del Manejo Integrado de Plagas (MIP), las etapas del tratamiento inicial y desmitificar la expectativa de erradicación inmediata. El control profesional es un proceso biológico progresivo y coordinado, no un acto de magia.',
+        problemStatement: 'Existe la falsa expectativa de que con la primera aplicación los insectos "desaparecen al instante por arte de magia". En la realidad técnica, los insecticidas de choque y residuales provocan un "efecto de desalojo" (flushing) donde las plagas ocultas salen de sus refugios y se muestran más activas o aturdidas antes de morir. Asimismo, ningún producto químico destruye las cápsulas de huevecillos (ootecas); la erradicación total requiere romper el ciclo reproductivo mediante aplicaciones programadas y seguimiento técnico constante.',
+        mandatoryRules: [
+          'DÍAS 1 AL 3 - EFECTO DESALOJO (TOTALMENTE NORMAL): Es normal ver insectos salir desorientados o convulsionando. No significa que "haya más plaga", sino que el químico penetró sus nidos expulsándolos hacia el exterior para su muerte.',
+          'PROHIBIDO APLICAR INSECTICIDAS CASEROS (AEROSOLES): Los insecticidas de supermercado tienen efecto repelente que arruina el tratamiento profesional, ahuyenta la plaga hacia otras áreas y neutraliza nuestros cebos.',
+          'NO LAVAR NI TRAPEAR ZÓCALOS POR 5 DÍAS: No trapee con cloro ni desengrasante las orillas y zócalos donde se colocó la película insecticida para no retirar la barrera química de protección.',
+          'DISPOSICIÓN HIGIÉNICA DE INSECTOS MUERTOS: Barrer diariamente los insectos caídos y depositarlos en bolsas de basura cerradas en contenedores exteriores para evitar contaminación.',
+          'REPORTE DE INCIDENCIAS SIN ALARMA: Si observa insectos tras la aplicación, anote la zona exacta y compártala con nuestro técnico para focalizar el refuerzo en la siguiente visita programada.',
+        ],
+        facilityRecommendations: [
+          'FASE 1 - CHOQUE Y DESALOJO (Semana 1): Eliminación masiva de adultos visibles y expulsión de refugios profundos.',
+          'FASE 2 - ROMPIMIENTO DEL CICLO BIOLÓGICO (Semanas 2 y 3): Control progresivo de ninfas nacidas de huevecillos antes de su madurez reproductiva.',
+          'FASE 3 - CONTROL TOTAL Y MANTENIMIENTO (Mes 2 en adelante): Mantenimiento del cordón sanitario y monitoreo mediante cebos y trampas.',
+          'EL 50% DEL ÉXITO ES LA HIGIENE: Es indispensable reparar fugas de humedad, desechar cajas de cartón innecesarias y no dejar comida expuesta en cajones o escritorios.',
+        ],
+        technicalDisclaimer: 'El control profesional de plagas es una ciencia biológica, no magia. EJ Exterminadores le asegura que con el cumplimiento de las fechas de su póliza y el seguimiento a estas recomendaciones, su empresa alcanzará un estatus sanitario óptimo y libre de plagas.',
+      ),
+
+      // 2. PROTOCOLO DE VISITAS Y MONITOREO EN PÓLIZAS
+      AdvisoryNoticeModel(
+        id: 'protocolo_visitas_poliza',
+        title: 'Protocolo de Visitas y Monitoreo: Dinámica de Servicio en Pólizas Comerciales',
+        category: 'Pólizas y Empresas',
+        targetAudience: 'Encargados de Mantenimiento, Seguridad Patrimonial y Recepción',
+        iconEmoji: '📋',
+        objective: 'Alinear la logística y los tiempos de cada visita técnica programada dentro de la póliza contratada para garantizar una cobertura total y bitácora sanitaria al día.',
+        problemStatement: 'Las áreas cerradas bajo llave, falta de autorización de acceso en caseta o la reubicación no informada de trampas de monitoreo interrumpen la cadena de protección y dejan puntos ciegos susceptibles a plagas.',
+        mandatoryRules: [
+          'FACILITAR ACCESO A ZONAS CRÍTICAS: Cuartos de máquinas, subestaciones, almacenes, cocinas y registros de drenaje deben estar accesibles para la inspección del técnico.',
+          'PROHIBIDO MOVER O MANIPULAR TRAMPAS: Las estaciones de cebado y trampas mecánicas están numeradas y geolocalizadas según el croquis técnico; no las mueva ni bloquee con cajas o tarimas.',
+          'REVISIÓN Y FIRMA DE CONFORMIDAD: Al finalizar la visita, el responsable del inmueble debe validar las acciones realizadas y firmar el reporte digital de servicio.',
+          'REPORTAR INCIDENCIAS AL TÉCNICO: Notificar si se detectaron roedores, insectos o si hubo ingresos recientes de mercancía sospechosa desde la última visita.',
+        ],
+        facilityRecommendations: [
+          'Inspección física y reposición de cebos rodenticidas en todo el perímetro exterior en cada visita programada.',
+          'Revisión de trampas de luz UV para insectos voladores y cambio periódico de láminas engomadas.',
+          'Generación y entrega inmediata del reporte digital con folio oficial y certificación sanitaria.',
+          'Monitoreo continuo de bitácora para auditorías de calidad o inspecciones de salubridad.',
+        ],
+        technicalDisclaimer: 'Una póliza de control de plagas es un escudo preventivo continuo. Cumplir puntualmente con cada visita programada en el cronograma evita que las plagas vuelvan a establecerse en sus instalaciones.',
+      ),
+
+      // 3. OFICINAS Y CAJONES DE COMIDA
       AdvisoryNoticeModel(
         id: 'oficinas_roedores',
         title: 'Buenas Prácticas e Higiene: Prevención de Roedores en Áreas de Oficina',
