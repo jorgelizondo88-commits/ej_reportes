@@ -136,7 +136,9 @@ class AdvisoryDetailScreen extends StatelessWidget {
                           style: const TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                         const SizedBox(height: 6),
-                        Row(
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
@@ -149,7 +151,6 @@ class AdvisoryDetailScreen extends StatelessWidget {
                                 style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white),
                               ),
                             ),
-                            const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
                               decoration: BoxDecoration(
@@ -413,12 +414,15 @@ class AdvisoryDetailScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    phase.phaseName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F2B48)),
+                                  Expanded(
+                                    child: Text(
+                                      phase.phaseName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF0F2B48)),
+                                    ),
                                   ),
+                                  const SizedBox(width: 8),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
