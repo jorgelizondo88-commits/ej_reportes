@@ -776,6 +776,156 @@ class AdvisoryNoticeModel {
         ],
         technicalDisclaimer: 'La garantía de efectividad de EJ Exterminadores depende de no remover el químico de las orillas. Si nota cualquier eventualidad extraordinaria, comuníquese de inmediato a nuestra línea de atención técnica: 813-175-9342.',
       ),
+
+      // 11. CONTINGENCIA POR LLUVIAS: INSECTOS, ARTRÓPODOS Y DINÁMICA DE RESIDUALIDAD
+      AdvisoryNoticeModel(
+        id: 'lluvias_insectos_artropodos',
+        title: 'Contingencia por Lluvias: Insectos, Artrópodos y Dinámica de Residualidad',
+        category: 'Lluvias y Contingencias',
+        targetAudience: 'Empresas, Parques Industriales, Colegios, Comercios y Residencias',
+        iconEmoji: '🌧️',
+        objective: 'Informar sobre el incremento natural de insectos y artrópodos desplazados por lluvias torrenciales y explicar científicamente cómo actúa la barrera residual (no instantánea) para evitar falsas alarmas operativas.',
+        regulatoryFramework: 'Cumplimiento con NOM-256-SSA1-2012 (Control de plagas urbanas y plaguicidas autorizados por COFEPRIS) y lineamientos de Bioseguridad y Salud Pública.',
+        problemStatement: 'Durante semanas de lluvias intensas en Monterrey y su zona metropolitana, los mantos freáticos, registros y drenajes pluviales se saturan e inundan por completo. Esto obliga a colonias enteras de cucarachas de drenaje, alacranes, ciempiés, tijerillas y arañas a abandonar sus nidos subterráneos y huir hacia terrenos secos y elevados, buscando refugio dentro de naves industriales, aulas escolares, oficinas y residencias. La presencia de ejemplares cruzando puertas o banquetas es un fenómeno migratorio natural del ecosistema y NO una deficiencia del servicio de control de plagas.',
+        dosAndDonts: [
+          NoticeDoDontItem(
+            badPractice: 'Alarmarse o asumir que la fumigación falló al ver insectos cruzando entradas tras la lluvia.',
+            goodPractice: 'Comprender que las inundaciones externas los empujan hacia adentro y que la barrera los interceptará.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Exigir químicos que "maten en el aire al instante" o rociar aerosoles de supermercado (Raid).',
+            goodPractice: 'Permitir que el insecto haga contacto con el suelo tratado; los aerosoles caseros dispersan los nidos.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Trapear con cloro o desengrasante los zócalos y orillas inmediatamente después de una tormenta.',
+            goodPractice: 'Secar solo el centro de las salas; mantener intacta la franja perimetral donde reside el producto activo.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Dejar puertas exteriores o de andén abiertas durante y después de los aguaceros.',
+            goodPractice: 'Mantener cerradas las puertas exteriores y verificar que los guardapolvos de hule o cepillo sellen bien.',
+          ),
+        ],
+        mandatoryRules: [
+          'LOS QUÍMICOS PROFESIONALES NO SON MAGIA INSTANTÁNEA: Los productos autorizados por COFEPRIS no vaporizan insectos al vuelo; actúan por contacto e ingestión. El insecto debe caminar sobre la superficie tratada para absorber el activo.',
+          'TIEMPO DE DERRIBO (MINUTOS A HORAS): Una vez que el insecto cruza la franja residual, el ingrediente activo tarda de 15 minutos a varias horas en colapsar su sistema nervioso. Ver un ejemplar desorientado o temblando es señal inequívoca de intoxicación en curso.',
+          'PROHIBIDO TRAPEAR ZÓCALOS TRAS LA LLUVIA: Aunque ingrese humedad, evite tallar con cloro o desengrasante la orilla de los muros durante los primeros 5 días post-servicio. La película microencapsulada es resistente al ambiente pero no al tallado abrasivo.',
+          'PROHIBIDO EL USO DE SPRAYS CASEROS: Los insecticidas comerciales contienen propelentes solventes que neutralizan la residualidad profesional y provocan que las plagas se dispersen a áreas limpias.',
+        ],
+        facilityRecommendations: [
+          'HERMETICIDAD DE GUARDAPOLVOS: Ajustar o reponer guardapolvos de hule o cepillo en puertas exteriores; los alacranes y ciempiés entran por ranuras menores a 3 milímetros huyendo del agua.',
+          'MALLAS EN COLADERAS PLUVIALES: Colocar tela mosquitera o malla metálica bajo rejillas pluviales y registros para frenar la subida masiva de cucarachas de alcantarilla.',
+          'DESMALEZADO PERIMETRAL: Podar pasto crecido, retirar escombros y hojas húmedas acumuladas en bardas y patios; la humedad vegetal es el refugio favorito de ciempiés y arañas.',
+          'REPORTE DE HALLAZGOS EXTRAORDINARIOS: Si detecta focos de ingreso recurrente, notifique a EJ Exterminadores para aplicar refuerzos focalizados en registros y pasacables.',
+        ],
+        biologicalPhases: [
+          NoticePhaseItem(
+            phaseName: 'Fase 1: Éxodo Pluvial Forzado',
+            timeFrame: 'Horas 0 a 48 post-lluvia',
+            description: 'El agua satura grietas y drenajes; insectos rastreros huyen del ahogamiento hacia andenes, pasillos y aulas buscando suelo seco.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 2: Absorción Cuticular',
+            timeFrame: 'Minutos tras el cruce',
+            description: 'El insecto pisa el perímetro tratado; los cristales microscópicos del insecticida se adhieren a sus patas y cutícula cerosa.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 3: Colapso Neurotóxico',
+            timeFrame: '30 min a 4 horas',
+            description: 'Fase de hiperactividad descontrolada seguida de parálisis motriz. El insecto queda boca arriba y muere en campo abierto.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 4: Restablecimiento y Barrera',
+            timeFrame: 'Días 3 a 15',
+            description: 'Concluido el temporal, la película residual continúa activa protegiendo las instalaciones contra cualquier intento de anidación.',
+          ),
+        ],
+        faqs: [
+          NoticeFaqItem(
+            question: '¿Por qué vi una cucaracha o ciempiés caminando si fumigaron recientemente?',
+            answer: 'La lluvia los expulsó de drenajes de la vía pública o jardines vecinos. Al intentar refugiarse en su inmueble ya pisaron la barrera perimetral. El químico profesional no crea un "muro invisible", sino que los intoxica al contacto: si los ve caminando lentos o temblorosos, están en proceso irreversible de muerte.',
+          ),
+          NoticeFaqItem(
+            question: '¿La humedad de las lluvias deslava o elimina el veneno aplicado?',
+            answer: 'No en interiores ni en zonas bajo techo. Manejamos suspensiones concentradas y microencapsuladas de grado industrial que se fijan a nivel molecular en zócalos y pisos. Lo único que lo elimina es el trapeado agresivo con cloro o desengrasantes.',
+          ),
+        ],
+        technicalDisclaimer: 'EJ Exterminadores garantiza formulaciones de residualidad prolongada aprobadas por COFEPRIS. Los fenómenos meteorológicos extraordinarios generan presión biológica extrema del entorno; nuestro tratamiento garantiza que ningún insecto invasor logre proliferar ni establecer nidos en su interior.',
+      ),
+
+      // 12. CONTROL DE ROEDORES: DESPLAZAMIENTO POR LLUVIAS, DRENAJES Y CEBO RETARDADO
+      AdvisoryNoticeModel(
+        id: 'lluvias_roedores_drenajes',
+        title: 'Control de Roedores: Desplazamiento por Lluvias, Drenajes y Cebo Retardado',
+        category: 'Lluvias y Contingencias',
+        targetAudience: 'Comités de Seguridad, Mantenimiento, Dirección Escolar y Gerencias de Planta',
+        iconEmoji: '🐀',
+        objective: 'Explicar el fenómeno de migración de roedores forzado por lluvias en drenajes urbanos y fundamentar científicamente el funcionamiento de los cebaderos de acción retardada para evitar alarma infundada.',
+        regulatoryFramework: 'Cumplimiento con NOM-256-SSA1-2012, directrices de Manejo Integrado de Plagas (MIP) y estándares de Bioseguridad y Salud Pública.',
+        problemStatement: 'Las precipitaciones intensas saturan las redes de alcantarillado, arroyos, canales pluviales y lotes baldíos en Monterrey y su zona conurbada. Esto provoca que colonias de roedores (rata de alcantarilla Rattus norvegicus, rata de tejado Rattus rattus y ratón casero Mus musculus) sean expulsadas de sus madrigueras subterráneas buscando refugio urgente en bodegas, techos, cocinas, falsos plafones y colegios. Es común que el personal observe ejemplares merodeando por el exterior o accesos. Este avistamiento es un síntoma del temporal climático de la localidad y no un fallo de su programa preventivo de cebado.',
+        dosAndDonts: [
+          NoticeDoDontItem(
+            badPractice: 'Pensar que un cebo profesional debe matar a la rata al instante de comerlo.',
+            goodPractice: 'Entender que el cebo retardado evita el recelo alimentario y permite abatir a toda la colonia.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Manipular, mover o abrir las estaciones cebaderas de plástico de EJ Exterminadores.',
+            goodPractice: 'Dejar las cajas cebaderas fijas y cerradas; están mapeadas estratégicamente con llave de seguridad.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Dejar restos de comida en botes sin tapa o comida en escritorios y aulas por la noche.',
+            goodPractice: 'Sellar basura herméticamente antes de las 18:00 hrs para obligar al roedor a consumir el cebo.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Asumir que las trampas impiden físicamente que un ratón pise la propiedad.',
+            goodPractice: 'Sellar rendijas en puertas y pasacables: la exclusión física bloquea el paso; el cebo elimina la población.',
+          ),
+        ],
+        mandatoryRules: [
+          'CIENCIA DEL CEBO RETARDADO (POR QUÉ NO ES INSTANTÁNEO): Las ratas son animales neofóbicos (desconfiados) y altamente gregarios. Si un cebo matara a una rata al instante, las demás del clan memorizan el veneno y jamás vuelven a probarlo (recelo al cebo).',
+          'ACCIÓN EN 3 A 5 DÍAS: Nuestros cebos anticoagulantes de segunda generación provocan somnolencia y muerte tranquila entre el día 3 y 5 dentro de sus madrigueras subterráneas, sin alertar a la manada y reduciendo olores en áreas operativas.',
+          'PRESIÓN EXTERNA DE LA ZONA: Si en los alrededores o drenajes públicos hay decenas de roedores desplazados por el agua, el control es un proceso continuo de intercepción y consumo, no una solución mágica de un solo día.',
+          'BASURA Y COMIDA CERO POR LA NOCHE: Los roedores tienen un olfato extraordinario. Si encuentran desperdicios o galletas en lockers, ignorarán los cebos. La limpieza de la empresa es el 50% del éxito.',
+        ],
+        facilityRecommendations: [
+          'REGLA DE LOS 6 MILÍMETROS: Un ratón pequeño puede ingresar por una abertura de apenas 6 mm (grosor de un lápiz). Revisar y calibrar cepillos inferiores en todas las puertas exteriores.',
+          'SELLADO DE PASACABLES Y TUBERÍAS: Bloquear con fibra de acero y sellador de poliuretano las entradas de cables, ductos de aire acondicionado y tuberías hidrosanitarias.',
+          'PODA DE RAMAS CONTIGUAS A TECHOS: La rata de tejado trepa cables y ramas de árboles para ingresar por falsos plafones y láminas. Podar ramas a mínimo 1.5 metros de distancia de muros.',
+          'MANTENIMIENTO PROGRAMADO DE CEBADEROS: Permitir que EJ Exterminadores inspeccione, limpie y reponga los cebos gastados en cada visita de póliza para mantener activo el cordón sanitario.',
+        ],
+        biologicalPhases: [
+          NoticePhaseItem(
+            phaseName: 'Fase 1: Invasión por Saturación Pluvial',
+            timeFrame: 'Días 1 a 3 post-lluvia',
+            description: 'Drenajes anegados desplazan colonias de roedores; ejemplares aislados exploran bordes exteriores e instalaciones buscando comida y sequedad.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 2: Intercepción y Consumo Seguro',
+            timeFrame: 'Días 3 a 7',
+            description: 'Los roedores exploran las estaciones cebaderas perimetrales fijas e ingieren las pastillas parafinadas de alta apetencia sin sospecha.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 3: Muerte Silenciosa en Nidos',
+            timeFrame: 'Días 5 a 10',
+            description: 'El anticoagulante produce fatiga natural. Los roedores buscan calor y refugio profundo en sus cuevas exteriores para expirar sin agonía visible.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 4: Blindaje y Abatimiento Total',
+            timeFrame: 'Monitoreo mensual continuo',
+            description: 'Corte definitivo de la curva poblacional. Las estaciones cebaderas se recargan para neutralizar nuevos arribos de predios vecinos.',
+          ),
+        ],
+        faqs: [
+          NoticeFaqItem(
+            question: '¿Por qué no usamos un veneno fulminante que mate a la rata en el acto?',
+            answer: 'La biología de los roedores es muy inteligente: cuando una rata muere de inmediato, el resto de la colonia aprende y prohíbe el consumo de ese alimento. El cebo anticoagulante tarda varios días de forma calculada para que todos los miembros de la colonia lo coman confiadamente hasta su erradicación total.',
+          ),
+          NoticeFaqItem(
+            question: '¿Por qué vemos roedores si ya tenemos estaciones cebaderas instaladas?',
+            answer: 'Las estaciones cebaderas NO son barreras físicas impenetrables; son puntos de control e intercepción alimentaria. Las lluvias torrenciales desbordan drenajes y expulsan roedores en masa hacia toda la zona. Al llegar, encontrarán los cebos de EJ Exterminadores y comenzará su ciclo de eliminación.',
+          ),
+        ],
+        technicalDisclaimer: 'EJ Exterminadores utiliza rodenticidas anticoagulantes de última generación formulados en cebos parafinados resistentes a la humedad, resguardados en cajas cebaderas de seguridad con llave. El control efectivo requiere hermeticidad estructural y manejo riguroso de basuras por parte de la empresa.',
+      ),
     ];
   }
 }
