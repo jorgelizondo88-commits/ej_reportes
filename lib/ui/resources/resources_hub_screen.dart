@@ -7,6 +7,7 @@ import '../../models/advisory_notice_model.dart';
 import '../../services/resource_pdf_service.dart';
 import 'pest_detail_screen.dart';
 import 'advisory_detail_screen.dart';
+import 'company_presentation_screen.dart';
 
 class ResourcesHubScreen extends StatefulWidget {
   const ResourcesHubScreen({super.key});
@@ -131,6 +132,18 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
         title: const Text('Biblioteca y Comunicados', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.co_present, color: Colors.amberAccent),
+            tooltip: 'Ver Presentación Corporativa',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CompanyPresentationScreen()),
+              );
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.amberAccent,
@@ -320,6 +333,72 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
 
     return Column(
       children: [
+        // Banner Destacado: Presentación Corporativa Oficial
+        Container(
+          margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0F2B48), Color(0xFF1E6091)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F2B48).withValues(alpha: 0.2),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.business_center, color: Colors.amberAccent, size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Presentación Corporativa Oficial',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13.5),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Dossier de 5 láminas en PDF para enviar a nuevos clientes y encargados.',
+                      style: TextStyle(color: Colors.white70, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amberAccent.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  elevation: 1,
+                ),
+                icon: const Icon(Icons.visibility, size: 16),
+                label: const Text('Ver / Enviar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CompanyPresentationScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+
         // Selector horizontal de categorías
         SizedBox(
           height: 48,
