@@ -42,7 +42,7 @@ class GoogleDriveSyncService {
   static const String _lastBackupDateKey = 'ej_last_cloud_backup_date';
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: Platform.isIOS ? '803570972313-hm9441otq7pmpu0qv42lp0rlrpq335bj.apps.googleusercontent.com' : null,
+    clientId: (Platform.isIOS || Platform.isMacOS) ? '803570972313-hm9441otq7pmpu0qv42lp0rlrpq335bj.apps.googleusercontent.com' : null,
     scopes: [
       'email',
       'https://www.googleapis.com/auth/drive',
