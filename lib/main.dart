@@ -1,6 +1,9 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'services/notification_service.dart';
+import 'ui/desktop/desktop_dashboard_screen.dart';
 import 'ui/hub/main_hub_screen.dart';
 
 void main() async {
@@ -40,7 +43,25 @@ class EJReportesApp extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         ),
       ),
-      home: const MainHubScreen(),
+      home: const _AdaptiveHomeScreen(),
     );
+  }
+}
+
+class _AdaptiveHomeScreen extends StatelessWidget {
+  const _AdaptiveHomeScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    // Si es computadora de escritorio (macOS o Windows) o pantalla ancha en Web -> Dashboard de Escritorio
+    final isDesktopPlatform = !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+    final isWideScreen = MediaQuery.of(context).size.width >= 850;
+
+    if (isDesktopPlatform || (kIsWeb && isWideScreen)) {
+      return const DesktopDashboardScreen();
+    }
+
+    // Si es móvil (Android / iPhone / pantallas compactas) -> Pantalla móvil tradicional
+    return const MainHubScreen();
   }
 }
