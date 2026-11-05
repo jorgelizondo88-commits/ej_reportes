@@ -21,6 +21,13 @@ dependencies:
   intl: ^0.20.3
   signature: ^6.4.0
   shared_preferences: ^2.5.5
+  device_calendar: ^4.3.3
+  url_launcher: ^6.3.3
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+  http: ^1.6.0
+  google_sign_in: ^6.2.2
+  googleapis: ^17.0.0
 
 dev_dependencies:
   flutter_test:

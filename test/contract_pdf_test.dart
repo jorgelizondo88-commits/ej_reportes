@@ -129,4 +129,43 @@ void main() {
 
     expect(nextFolio, 'EJ-POL-$year-0006');
   });
+
+  test('Contrato con frecuencia Trimestral genera PDF correctamente en 2 páginas', () async {
+    final contract = ContractModel(
+      id: 'test_trimestral',
+      folio: 'EJ-POL-2026-0003',
+      creationDate: DateTime.now(),
+      clientName: 'Lic. Roberto Garza',
+      businessName: 'Colegio Cumbres Monterrey',
+      rfc: 'CCM900101XYZ',
+      address: 'Av. Vasconcelos 500, San Pedro Garza García, N.L.',
+      phone: '818-123-4567',
+      email: 'direccion@colegiocumbres.edu.mx',
+      representativeName: 'Lic. Roberto Garza Treviño',
+      representativeRole: 'Director Administrativo',
+      representativePhone: '818-123-4567',
+      serviceType: 'Póliza Escolar Integral',
+      durationMonths: 12,
+      startDate: DateTime(2026, 1, 1),
+      endDate: DateTime(2026, 12, 31),
+      visitFrequency: 'Trimestral (1 visita c/3 meses)',
+      totalVisits: 4, // 12 meses / 3 = 4 visitas exactas
+      targetPests: ['Cucarachas', 'Roedores', 'Alacranes', 'Ciempiés'],
+      coveredAreas: 'Aulas, laboratorios, cafetería, canchas y perímetro exterior',
+      costPerVisit: 3000.0,
+      monthlyCost: 1000.0,
+      totalContractCost: 12000.0,
+      paymentMethod: 'Transferencia Electrónica',
+      paymentTerms: 'Crédito comercial a 15 días tras entrega de reporte',
+      specialClauses: 'Servicio en periodos vacacionales y contraturno.',
+      jurisdiction: 'Monterrey, Nuevo León',
+      signerFullName: 'Lic. Roberto Garza Treviño',
+    );
+
+    final pdfBytes = await ContractPdfService.generateContractPdf(contract);
+    expect(pdfBytes.isNotEmpty, true);
+    final pdfString = String.fromCharCodes(pdfBytes);
+    final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfString).length;
+    expect(pageCount, 2, reason: 'El contrato trimestral debe caber en 2 páginas ejecutivas');
+  });
 }

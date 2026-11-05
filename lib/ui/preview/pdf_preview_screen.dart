@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/report_model.dart';
 import '../../services/pdf_service.dart';
+import '../../services/google_drive_sync_service.dart';
 
 class PdfPreviewScreen extends StatefulWidget {
   final ServiceReport report;
@@ -83,6 +84,15 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       }
 
       await prefs.setString(_historyKey, jsonEncode(historyList));
+
+      // Sincronización automática en segundo plano con Google Drive (Offline-First)
+      GoogleDriveSyncService().enqueueAndSync(
+        clientName: widget.report.clientName.isNotEmpty ? widget.report.clientName : widget.report.businessName,
+        documentType: 'Reporte',
+        folio: widget.report.reportFolio,
+        localFilePath: file.path,
+        fileName: 'Reporte_${cleanFolio}.pdf',
+      );
 
       if (mounted) {
         setState(() {
@@ -198,6 +208,28 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           canDebug: false,
           maxPageWidth: screenWidth, // Ajusta la página al ancho del dispositivo
           pdfFileName: fileName,
+          onError: (context, error) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'No se pudo generar la vista previa del reporte.',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+          ),
           loadingWidget: const Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,

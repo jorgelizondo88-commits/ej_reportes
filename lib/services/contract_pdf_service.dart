@@ -136,7 +136,9 @@ class ContractPdfService {
         footer: (context) => _buildPageFooter(contract, context),
         build: (context) {
           final bool isSameMonthlyCost = (contract.costPerVisit - contract.monthlyCost).abs() < 0.01 ||
-              (contract.visitFrequency.toLowerCase().contains('mensual') && !contract.visitFrequency.toLowerCase().contains('bi'));
+              (contract.visitFrequency.toLowerCase().contains('mensual') &&
+                  !contract.visitFrequency.toLowerCase().contains('bi') &&
+                  !contract.visitFrequency.toLowerCase().contains('tri'));
 
           return [
             pw.SizedBox(height: 10),

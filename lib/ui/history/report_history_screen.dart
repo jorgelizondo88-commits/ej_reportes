@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/google_drive_sync_service.dart';
 
 class ReportHistoryScreen extends StatefulWidget {
   const ReportHistoryScreen({super.key});
@@ -67,22 +68,50 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 
   Future<void> _shareReport(Map<String, dynamic> report) async {
     final filePath = report['filePath'] as String?;
-    if (filePath == null) return;
-
-    final file = File(filePath);
-    if (!await file.exists()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El archivo PDF no se encontró en la memoria del dispositivo.')),
-        );
-      }
-      return;
-    }
+    File? file = (filePath != null && filePath.isNotEmpty) ? File(filePath) : null;
 
     final folio = (report['folio'] ?? '').toString().trim();
     final clientTitle = (report['businessName'] != null && report['businessName'].toString().trim().isNotEmpty)
         ? report['businessName'].toString().trim()
         : (report['clientName'] ?? '').toString().trim();
+
+    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), descargarlo de Drive
+    if (file == null || !file.existsSync()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                SizedBox(width: 12),
+                Text('Descargando reporte desde Google Drive...'),
+              ],
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+
+      file = await GoogleDriveSyncService().downloadDocumentPdf(
+        clientName: clientTitle,
+        documentType: 'Reporte',
+        folio: folio,
+      );
+
+      if (file == null || !file.existsSync()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo encontrar el archivo en Google Drive.')),
+          );
+        }
+        return;
+      }
+
+      // Guardar la nueva ruta local permanente en la memoria del teléfono
+      report['filePath'] = file.path;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_historyKey, jsonEncode(_allReports));
+    }
 
     final cleanFolio = folio.replaceAll(RegExp(r'[^\w-]'), '_');
     final cleanClient = clientTitle
@@ -96,7 +125,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     try {
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/$fileName');
-      await file.copy(tempFile.path);
+      await file!.copy(tempFile.path);
 
       await Share.shareXFiles(
         [XFile(tempFile.path, name: fileName)],
@@ -106,36 +135,68 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     } catch (_) {
       // Si por alguna razón falla la copia temporal, compartimos el original
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [XFile(file!.path)],
         text: 'Reporte de Servicio de Control de Plagas - Folio $folio',
         subject: 'Reporte de Servicio: ${clientTitle.isNotEmpty ? clientTitle : folio}',
       );
     }
   }
 
-  void _openViewer(Map<String, dynamic> report) {
+  Future<void> _openViewer(Map<String, dynamic> report) async {
     final filePath = report['filePath'] as String?;
-    if (filePath == null) return;
-
-    final file = File(filePath);
-    if (!file.existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El archivo PDF no se encuentra disponible.')),
-      );
-      return;
-    }
+    File? file = (filePath != null && filePath.isNotEmpty) ? File(filePath) : null;
 
     final folio = (report['folio'] ?? '').toString().trim();
     final clientTitle = (report['businessName'] != null && report['businessName'].toString().trim().isNotEmpty)
         ? report['businessName'].toString().trim()
         : (report['clientName'] ?? '').toString().trim();
 
+    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), descargarlo de Drive
+    if (file == null || !file.existsSync()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                SizedBox(width: 12),
+                Text('Descargando reporte desde Google Drive...'),
+              ],
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+
+      file = await GoogleDriveSyncService().downloadDocumentPdf(
+        clientName: clientTitle,
+        documentType: 'Reporte',
+        folio: folio,
+      );
+
+      if (file == null || !file.existsSync()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo encontrar el archivo en Google Drive.')),
+          );
+        }
+        return;
+      }
+
+      // Guardar la nueva ruta local permanente en la memoria del teléfono para aperturas instantáneas
+      report['filePath'] = file.path;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_historyKey, jsonEncode(_allReports));
+    }
+
+    if (!mounted) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => _SavedPdfViewerScreen(
           title: 'Folio: $folio',
-          filePath: filePath,
+          filePath: file!.path,
           folio: folio,
           clientName: clientTitle,
         ),

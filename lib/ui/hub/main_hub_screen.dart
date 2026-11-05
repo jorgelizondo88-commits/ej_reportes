@@ -10,10 +10,16 @@ import '../history/report_history_screen.dart';
 import '../home_screen.dart';
 import '../quotes/quote_form_screen.dart';
 import '../quotes/quote_history_screen.dart';
+import '../schedule/quick_appointment_screen.dart';
 import '../schedule/schedule_form_screen.dart';
 import '../schedule/schedule_history_screen.dart';
 import '../resources/resources_hub_screen.dart';
 import '../resources/company_presentation_screen.dart';
+import '../../services/trap_layout_service.dart';
+import '../layouts/trap_layouts_history_screen.dart';
+import '../layouts/trap_layout_canvas_screen.dart';
+import '../cloud/google_drive_sync_screen.dart';
+import '../invoices/invoices_hub_screen.dart';
 
 class MainHubScreen extends StatefulWidget {
   const MainHubScreen({super.key});
@@ -28,6 +34,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
   int _quoteCount = 0;
   int _scheduleCount = 0;
   int _contractCount = 0;
+  int _layoutCount = 0;
 
   @override
   void initState() {
@@ -52,6 +59,8 @@ class _MainHubScreenState extends State<MainHubScreen> {
     final rawContracts = prefs.getString('ej_contracts_history_list');
     final contractsList = (rawContracts != null && rawContracts.isNotEmpty) ? jsonDecode(rawContracts) : [];
 
+    final layoutsList = await TrapLayoutService().getAllLayouts();
+
     if (mounted) {
       setState(() {
         _clientCount = clients.length;
@@ -59,6 +68,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
         _quoteCount = quotesList.length;
         _scheduleCount = schedulesList.length;
         _contractCount = contractsList.length;
+        _layoutCount = layoutsList.length;
       });
     }
   }
@@ -221,15 +231,67 @@ class _MainHubScreenState extends State<MainHubScreen> {
               ),
               const SizedBox(height: 14),
 
-              // 3. Tarjeta CALENDARIZACIÓN
+              // 3. Tarjeta AGENDA Y CALENDARIO
               _moduleCard(
-                icon: Icons.calendar_month_outlined,
+                icon: Icons.calendar_today_outlined,
+                iconColor: Colors.teal.shade800,
+                badgeText: 'Google Sync',
+                badgeColor: Colors.teal,
+                title: 'Agenda y Calendario de Servicios',
+                subtitle: 'Agenda interactiva de citas, prospectos, inspecciones y visitas de control de plagas sincronizadas con Google Calendar (móvil y PC).',
+                primaryButtonText: 'Abrir Agenda y Calendario',
+                onPrimaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ScheduleHistoryScreen(initialTab: 0)),
+                  );
+                  _loadMetrics();
+                },
+                secondaryButtonText: '+ Agendar Cita o Prospecto',
+                onSecondaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const QuickAppointmentScreen()),
+                  );
+                  _loadMetrics();
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 4. Tarjeta FACTURACIÓN & COBRANZA
+              _moduleCard(
+                icon: Icons.receipt_long_outlined,
+                iconColor: const Color(0xFF16A34A),
+                badgeText: 'CFDI en Drive',
+                badgeColor: const Color(0xFF16A34A),
+                title: 'Facturación & Cobranza',
+                subtitle: 'Control de facturas pendientes de pago y pagadas (PDF + XML). Visualiza el PDF en el móvil, envíalo por WhatsApp con recordatorio y confirma pagos en tiempo real.',
+                primaryButtonText: 'Ver Facturas y Cobranza',
+                onPrimaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const InvoicesHubScreen()),
+                  );
+                },
+                secondaryButtonText: 'Ver Facturas Pendientes',
+                onSecondaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const InvoicesHubScreen(initialTab: 0)),
+                  );
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 5. Tarjeta CRONOGRAMAS DE SERVICIO EN PDF
+              _moduleCard(
+                icon: Icons.picture_as_pdf_outlined,
                 iconColor: Colors.orange.shade800,
-                badgeText: _scheduleCount > 0 ? '$_scheduleCount activas' : 'Activo',
+                badgeText: _scheduleCount > 0 ? '$_scheduleCount registrados' : 'Formatos PDF',
                 badgeColor: Colors.orange,
-                title: 'Calendarización y Cronograma',
-                subtitle: 'Programa periódico de visitas mensuales/bimestrales y calendario oficial en PDF para clientes.',
-                primaryButtonText: 'Nueva Calendarización',
+                title: 'Cronogramas de Servicio (PDF)',
+                subtitle: 'Elaboración de cronogramas y calendarios periódicos de servicio en formato PDF oficial para empresas y pólizas.',
+                primaryButtonText: 'Nuevo Cronograma PDF',
                 onPrimaryPressed: () async {
                   await Navigator.push(
                     context,
@@ -237,18 +299,18 @@ class _MainHubScreenState extends State<MainHubScreen> {
                   );
                   _loadMetrics();
                 },
-                secondaryButtonText: 'Historial y Agenda',
+                secondaryButtonText: 'Historial de Cronogramas PDF',
                 onSecondaryPressed: () async {
                   await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const ScheduleHistoryScreen()),
+                    MaterialPageRoute(builder: (context) => const ScheduleHistoryScreen(initialTab: 2)),
                   );
                   _loadMetrics();
                 },
               ),
               const SizedBox(height: 14),
 
-              // 4. Tarjeta PÓLIZAS Y CONTRATOS DIGITALES
+              // 6. Tarjeta PÓLIZAS Y CONTRATOS DIGITALES
               _moduleCard(
                 icon: Icons.draw_outlined,
                 iconColor: Colors.indigo.shade800,
@@ -275,7 +337,34 @@ class _MainHubScreenState extends State<MainHubScreen> {
               ),
               const SizedBox(height: 14),
 
-              // 5. Tarjeta DIRECTORIO DE CLIENTES
+              // 7. Tarjeta PLANOS Y LAYOUTS DE TRAMPAS
+              _moduleCard(
+                icon: Icons.architecture_outlined,
+                iconColor: Colors.blueGrey.shade800,
+                badgeText: _layoutCount > 0 ? '$_layoutCount planos' : 'Auditorías AIB',
+                badgeColor: const Color(0xFF0F2B48),
+                title: 'Planos y Layouts de Trampas',
+                subtitle: 'Diseño interactivo de croquis y planos con ubicación de cebaderos exteriores, trampas mecánicas interiores y censo oficial en PDF.',
+                primaryButtonText: 'Ver Planos y Layouts',
+                onPrimaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const TrapLayoutsHistoryScreen()),
+                  );
+                  _loadMetrics();
+                },
+                secondaryButtonText: '+ Nuevo Plano / Layout',
+                onSecondaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const TrapLayoutCanvasScreen()),
+                  );
+                  _loadMetrics();
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 8. Tarjeta DIRECTORIO DE CLIENTES
               _moduleCard(
                 icon: Icons.people_alt_outlined,
                 iconColor: Colors.teal.shade800,
@@ -296,19 +385,19 @@ class _MainHubScreenState extends State<MainHubScreen> {
               ),
               const SizedBox(height: 14),
 
-              // 6. Tarjeta BIBLIOTECA DE PLAGAS Y COMUNICADOS
+              // 9. Tarjeta DOCUMENTOS OFICIALES, PROTOCOLOS Y FICHAS
               _moduleCard(
                 icon: Icons.menu_book_outlined,
                 iconColor: Colors.deepPurple.shade700,
                 badgeText: 'Fichas y PDFs',
                 badgeColor: Colors.deepPurple,
-                title: 'Biblioteca, Avisos y Presentación',
-                subtitle: 'Fichas técnicas de plagas, avisos oficiales de buenas prácticas y presentación corporativa de 5 láminas en PDF para clientes.',
-                primaryButtonText: 'Abrir Biblioteca y Avisos',
+                title: 'Documentos Oficiales, Protocolos y Fichas',
+                subtitle: 'Documentos listos para enviar a clientes (Fiprax/Gel, Oficinas, Casas), fichas de plagas y presentación corporativa en PDF.',
+                primaryButtonText: 'Abrir Documentos y Protocolos',
                 onPrimaryPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const ResourcesHubScreen()),
+                    MaterialPageRoute(builder: (context) => const ResourcesHubScreen(initialTab: 1)),
                   );
                 },
                 secondaryButtonText: 'Presentación Corporativa',
@@ -317,6 +406,33 @@ class _MainHubScreenState extends State<MainHubScreen> {
                     context,
                     MaterialPageRoute(builder: (context) => const CompanyPresentationScreen()),
                   );
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 10. Tarjeta NUBE GOOGLE DRIVE (5 TB) & EXPEDIENTES DIGITALES
+              _moduleCard(
+                icon: Icons.cloud_done_outlined,
+                iconColor: Colors.blue.shade800,
+                badgeText: '5 TB Nube',
+                badgeColor: Colors.blue.shade700,
+                title: 'Nube Google Drive & Respaldos',
+                subtitle: 'Sincronización automática de PDFs organizada por cliente, respaldo de base de datos maestra y enlaces de solo lectura para compartir por WhatsApp.',
+                primaryButtonText: 'Abrir Nube y Respaldos',
+                onPrimaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const GoogleDriveSyncScreen()),
+                  );
+                  _loadMetrics();
+                },
+                secondaryButtonText: 'Sincronizar Historial Ahora',
+                onSecondaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const GoogleDriveSyncScreen()),
+                  );
+                  _loadMetrics();
                 },
               ),
               const SizedBox(height: 24),

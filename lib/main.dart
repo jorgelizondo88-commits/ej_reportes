@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'services/notification_service.dart';
 import 'ui/hub/main_hub_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await initializeDateFormatting('es_MX', null);
+  } catch (_) {}
+  try {
+    await NotificationService().init();
   } catch (_) {}
   runApp(const EJReportesApp());
 }

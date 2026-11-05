@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/client_model.dart';
 import '../../services/client_service.dart';
+import '../../services/google_drive_sync_service.dart';
+import '../cloud/google_drive_sync_screen.dart';
+import '../invoices/invoices_hub_screen.dart';
 import '../quotes/quote_form_screen.dart';
 
 class ClientsDirectoryScreen extends StatefulWidget {
@@ -44,6 +48,93 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
             c.address.toLowerCase().contains(query);
       }).toList();
     });
+  }
+
+  Future<void> _shareClientFolder(ClientModel client) async {
+    final driveService = GoogleDriveSyncService();
+    if (!driveService.isSignedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Para compartir la carpeta del cliente, conecta Google Drive primero.'),
+          backgroundColor: const Color(0xFF0F2B48),
+          action: SnackBarAction(
+            label: 'Conectar Nube',
+            textColor: Colors.amberAccent,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const GoogleDriveSyncScreen()),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Generando enlace de solo lectura para el cliente...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    final link = await driveService.getOrCreateClientFolderShareLink(client.businessName);
+    if (link != null && mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              const Icon(Icons.folder_shared, color: Color(0xFF0F2B48)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Expediente en la Nube: ${client.businessName}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Este enlace es permanente y de "Solo Lectura". El cliente puede ver y descargar todos sus reportes, cotizaciones y planos sin poder borrar nada:',
+                style: TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: SelectableText(link, style: const TextStyle(fontSize: 11, color: Colors.blue)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF15803D), foregroundColor: Colors.white),
+              icon: const Icon(Icons.share, size: 16),
+              label: const Text('Enviar por WhatsApp'),
+              onPressed: () async {
+                Navigator.pop(context);
+                final message = 'Estimado cliente ${client.businessName}, le compartimos el enlace oficial a su Expediente Digital de EJ Exterminadores en la nube. Aquí tendrá disponible su historial de reportes de servicio, cotizaciones y planos en tiempo real:\n$link';
+                await Share.share(message);
+              },
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   void _openClientDialog({ClientModel? client}) {
@@ -291,9 +382,40 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                           ),
                         ],
                         const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: 8,
+                          runSpacing: 4,
                           children: [
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                side: const BorderSide(color: Color(0xFF15803D)),
+                                foregroundColor: const Color(0xFF15803D),
+                              ),
+                              icon: const Icon(Icons.folder_shared_outlined, size: 16),
+                              label: const Text('Expediente', style: TextStyle(fontSize: 12)),
+                              onPressed: () => _shareClientFolder(c),
+                            ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                side: const BorderSide(color: Color(0xFF0F2B48)),
+                                foregroundColor: const Color(0xFF0F2B48),
+                              ),
+                              icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                              label: const Text('Facturas', style: TextStyle(fontSize: 12)),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => InvoicesHubScreen(
+                                      initialClientFilter: c.businessName,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                             OutlinedButton.icon(
                               style: OutlinedButton.styleFrom(
                                 visualDensity: VisualDensity.compact,

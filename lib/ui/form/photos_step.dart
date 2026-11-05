@@ -54,67 +54,70 @@ class _PhotosStepState extends State<PhotosStep> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Evidencias del Servicio (${widget.evidences.length})',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              Row(
-                children: [
-                  IconButton.filled(
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F2B48),
-                      foregroundColor: Colors.white,
-                    ),
-                    icon: const Icon(Icons.camera_alt),
-                    tooltip: 'Tomar Foto',
-                    onPressed: _isProcessing ? null : _takePhoto,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Evidencias del Servicio (${widget.evidences.length})',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            Row(
+              children: [
+                IconButton.filled(
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F2B48),
+                    foregroundColor: Colors.white,
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filledTonal(
-                    icon: const Icon(Icons.photo_library),
-                    tooltip: 'Galería',
-                    onPressed: _isProcessing ? null : _pickGallery,
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (_isProcessing) ...[
-            const SizedBox(height: 10),
-            const LinearProgressIndicator(),
+                  icon: const Icon(Icons.camera_alt),
+                  tooltip: 'Tomar Foto',
+                  onPressed: _isProcessing ? null : _takePhoto,
+                ),
+                const SizedBox(width: 8),
+                IconButton.filledTonal(
+                  icon: const Icon(Icons.photo_library),
+                  tooltip: 'Galería',
+                  onPressed: _isProcessing ? null : _pickGallery,
+                ),
+              ],
+            ),
           ],
-          const SizedBox(height: 12),
-          if (widget.evidences.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+        ),
+        if (_isProcessing) ...[
+          const SizedBox(height: 10),
+          const LinearProgressIndicator(),
+        ],
+        const SizedBox(height: 12),
+        if (widget.evidences.isEmpty)
+          Expanded(
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_a_photo_outlined, size: 40, color: Colors.grey),
+                    SizedBox(height: 8),
+                    Text(
+                      'Sin fotos agregadas. Puedes tomar fotos con la cámara o elegirlas de la galería.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.black54),
+                    ),
+                  ],
+                ),
               ),
-              child: const Column(
-                children: [
-                  Icon(Icons.add_a_photo_outlined, size: 40, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text(
-                    'Sin fotos agregadas. Puedes tomar fotos con la cámara o elegirlas de la galería.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                ],
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+            ),
+          )
+        else
+          Expanded(
+            child: ListView.separated(
               itemCount: widget.evidences.length,
               separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
@@ -130,9 +133,8 @@ class _PhotosStepState extends State<PhotosStep> {
                 );
               },
             ),
-          const SizedBox(height: 24),
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
@@ -185,7 +187,15 @@ class _PhotoCardItemState extends State<_PhotoCardItem> {
                 File(widget.photo.path),
                 width: 80,
                 height: 80,
+                cacheWidth: 200,
+                cacheHeight: 200,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: 80,
+                  height: 80,
+                  color: Colors.grey.shade200,
+                  child: const Icon(Icons.broken_image, color: Colors.grey),
+                ),
               ),
             ),
             const SizedBox(width: 12),

@@ -24,8 +24,32 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>GIDClientID</key>
+	<string>803570972313-hm9441otq7pmpu0qv42lp0rlrpq335bj.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.803570972313-hm9441otq7pmpu0qv42lp0rlrpq335bj</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Se requiere acceso al calendario para sincronizar las visitas programadas de control de plagas con Google Calendar.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Se requiere acceso completo al calendario para crear y actualizar los servicios agendados.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>whatsapp</string>
+		<string>tel</string>
+		<string>https</string>
+		<string>http</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Se requiere acceso a la cámara para capturar evidencia fotográfica del servicio de control de plagas.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

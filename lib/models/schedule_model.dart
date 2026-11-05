@@ -9,6 +9,16 @@ class ScheduledVisit {
   String status; // 'Pendiente', 'Realizada', 'Reagendada', 'Cancelada'
   String notes;
   DateTime? completedDate;
+  String? calendarEventId;
+  String? calendarId;
+  String? scheduleId;
+  String clientBusinessName;
+  String clientContactName;
+  String clientPhone;
+  String clientAddress;
+  bool isProspect;
+  bool isInAgenda;
+  List<int> reminderMinutes;
 
   ScheduledVisit({
     required this.id,
@@ -19,6 +29,16 @@ class ScheduledVisit {
     this.status = 'Pendiente',
     this.notes = '',
     this.completedDate,
+    this.calendarEventId,
+    this.calendarId,
+    this.scheduleId,
+    this.clientBusinessName = '',
+    this.clientContactName = '',
+    this.clientPhone = '',
+    this.clientAddress = '',
+    this.isProspect = false,
+    this.isInAgenda = false,
+    this.reminderMinutes = const [2880, 1440, 120],
   });
 
   Map<String, dynamic> toMap() {
@@ -31,6 +51,16 @@ class ScheduledVisit {
       'status': status,
       'notes': notes,
       'completedDate': completedDate?.toIso8601String(),
+      'calendarEventId': calendarEventId,
+      'calendarId': calendarId,
+      'scheduleId': scheduleId,
+      'clientBusinessName': clientBusinessName,
+      'clientContactName': clientContactName,
+      'clientPhone': clientPhone,
+      'clientAddress': clientAddress,
+      'isProspect': isProspect,
+      'isInAgenda': isInAgenda,
+      'reminderMinutes': reminderMinutes,
     };
   }
 
@@ -44,6 +74,16 @@ class ScheduledVisit {
       status: map['status'] ?? 'Pendiente',
       notes: map['notes'] ?? '',
       completedDate: map['completedDate'] != null ? DateTime.tryParse(map['completedDate']) : null,
+      calendarEventId: map['calendarEventId'],
+      calendarId: map['calendarId'],
+      scheduleId: map['scheduleId'],
+      clientBusinessName: map['clientBusinessName'] ?? '',
+      clientContactName: map['clientContactName'] ?? '',
+      clientPhone: map['clientPhone'] ?? '',
+      clientAddress: map['clientAddress'] ?? '',
+      isProspect: map['isProspect'] == true,
+      isInAgenda: map['isInAgenda'] == true,
+      reminderMinutes: (map['reminderMinutes'] as List?)?.map((e) => (e as num).toInt()).toList() ?? const [2880, 1440, 120],
     );
   }
 }
@@ -59,9 +99,12 @@ class ScheduleModel {
   final String clientAddress;
   final String clientEmail;
   final String facilityType;
+  final bool isProspect;
+  final bool isInAgenda;
+  final String appointmentCategory; // 'Poliza', 'Prospecto', 'Inspeccion', 'Residencial', 'Comercial'
 
   // Parámetros de Recurrencia
-  final String recurrenceType; // 'relative', 'fixed_day', 'custom'
+  final String recurrenceType; // 'relative', 'fixed_day', 'custom', 'single'
   final int visitsPerMonth; // 1 = Mensual, 2 = Quincenal / 2 veces por mes
   final int ordinalWeek; // 1 = 1er, 2 = 2do, 3 = 3er, 4 = 4to, 5 = Último
   final int secondOrdinalWeek; // Para 2da visita si es relative (default 3 = 3er)
@@ -89,6 +132,9 @@ class ScheduleModel {
     required this.clientAddress,
     required this.clientEmail,
     this.facilityType = 'Comercial / Restaurante',
+    this.isProspect = false,
+    this.isInAgenda = false,
+    this.appointmentCategory = 'Poliza',
     this.recurrenceType = 'relative',
     this.visitsPerMonth = 1,
     this.ordinalWeek = 1,
@@ -119,6 +165,11 @@ class ScheduleModel {
 
   /// Descripción legible de la regla de periodicidad
   String get recurrenceDescription {
+    if (recurrenceType == 'single') {
+      if (isProspect) return '🎯 Prospección / 1ra Visita';
+      return 'Cita Única: $serviceType';
+    }
+
     final ordinals = {1: '1er', 2: '2do', 3: '3er', 4: '4to', 5: 'Último'};
     final days = {
       1: 'Lunes',
@@ -165,6 +216,9 @@ class ScheduleModel {
       'clientAddress': clientAddress,
       'clientEmail': clientEmail,
       'facilityType': facilityType,
+      'isProspect': isProspect,
+      'isInAgenda': isInAgenda,
+      'appointmentCategory': appointmentCategory,
       'recurrenceType': recurrenceType,
       'visitsPerMonth': visitsPerMonth,
       'ordinalWeek': ordinalWeek,
@@ -195,6 +249,9 @@ class ScheduleModel {
       clientAddress: map['clientAddress'] ?? '',
       clientEmail: map['clientEmail'] ?? '',
       facilityType: map['facilityType'] ?? 'Comercial / Restaurante',
+      isProspect: map['isProspect'] == true,
+      isInAgenda: map['isInAgenda'] == true || map['recurrenceType'] == 'single',
+      appointmentCategory: map['appointmentCategory'] ?? (map['isProspect'] == true ? 'Prospecto' : 'Poliza'),
       recurrenceType: map['recurrenceType'] ?? 'relative',
       visitsPerMonth: map['visitsPerMonth'] ?? 1,
       ordinalWeek: map['ordinalWeek'] ?? 1,

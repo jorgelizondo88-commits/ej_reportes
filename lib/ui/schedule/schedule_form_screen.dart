@@ -52,6 +52,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
   int _secondFixedDay = 15; // Día 15 para 2da visita si es fixed_day
   int _durationMonths = 12; // 3, 5, 6, 12...
   TimeOfDay _defaultTime = const TimeOfDay(hour: 9, minute: 0);
+  bool _addToAgenda = false; // Control de inclusión en Agenda
 
   final List<ScheduledVisit> _visits = [];
 
@@ -103,7 +104,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
     _addressController = TextEditingController();
     _phoneController = TextEditingController();
     _emailController = TextEditingController();
-    _serviceTypeController = TextEditingController(text: 'Control y Mantenimiento Periódico');
+    _serviceTypeController = TextEditingController(text: 'Servicio de Control de Plagas');
     _conditionsController = TextEditingController(text: ScheduleModel.defaultConditions());
     _notesController = TextEditingController();
     _repController = TextEditingController(text: 'EJ Exterminadores');
@@ -181,15 +182,25 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
         _phoneController.text = map['phone'] ?? '';
         _emailController.text = map['email'] ?? '';
         _facilityType = map['facilityType'] ?? 'Comercial / Restaurante';
-        _serviceTypeController.text = map['serviceType'] ?? _serviceTypeController.text;
+        final savedServiceType = (map['serviceType'] ?? '').toString();
+        if (savedServiceType.isEmpty || savedServiceType.toLowerCase().contains('dormitorio') || savedServiceType == 'Control y Mantenimiento Periódico') {
+          _serviceTypeController.text = 'Servicio de Control de Plagas';
+        } else {
+          _serviceTypeController.text = savedServiceType;
+        }
         _conditionsController.text = map['conditions'] ?? ScheduleModel.defaultConditions();
         _notesController.text = map['notes'] ?? '';
         _repController.text = map['elaboratedBy'] ?? _repController.text;
+        _addToAgenda = map['addToAgenda'] ?? false;
 
         _visits.clear();
         if (map['visits'] != null) {
           for (var vMap in (map['visits'] as List)) {
-            _visits.add(ScheduledVisit.fromMap(vMap));
+            final v = ScheduledVisit.fromMap(vMap);
+            if (v.serviceType.toLowerCase().contains('dormitorio') || v.serviceType.isEmpty) {
+              v.serviceType = 'Servicio de Control de Plagas';
+            }
+            _visits.add(v);
           }
         }
       });
@@ -226,6 +237,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       'conditions': _conditionsController.text,
       'notes': _notesController.text,
       'elaboratedBy': _repController.text,
+      'addToAgenda': _addToAgenda,
       'visits': _visits.map((v) => v.toMap()).toList(),
     };
     await prefs.setString(_scheduleDraftKey, jsonEncode(draftMap));
@@ -278,7 +290,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       final defaultTimeStr = _formatTimeOfDay(_defaultTime);
       final serviceTypeStr = _serviceTypeController.text.trim().isNotEmpty
           ? _serviceTypeController.text.trim()
-          : 'Control y Mantenimiento Mensual';
+          : 'Servicio de Control de Plagas';
 
       final List<ScheduledVisit> generated = [];
 
@@ -303,6 +315,11 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
             time: defaultTimeStr,
             serviceType: serviceTypeStr,
             status: 'Pendiente',
+            clientBusinessName: _businessController.text.trim(),
+            clientContactName: _contactController.text.trim(),
+            clientPhone: _phoneController.text.trim(),
+            clientAddress: _addressController.text.trim(),
+            scheduleId: _folioController.text.trim(),
           ),
         );
 
@@ -323,6 +340,11 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
               time: defaultTimeStr,
               serviceType: serviceTypeStr,
               status: 'Pendiente',
+              clientBusinessName: _businessController.text.trim(),
+              clientContactName: _contactController.text.trim(),
+              clientPhone: _phoneController.text.trim(),
+              clientAddress: _addressController.text.trim(),
+              scheduleId: _folioController.text.trim(),
             ),
           );
         }
@@ -341,11 +363,103 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
             time: generated[idx].time,
             serviceType: generated[idx].serviceType,
             status: generated[idx].status,
+            clientBusinessName: generated[idx].clientBusinessName,
+            clientContactName: generated[idx].clientContactName,
+            clientPhone: generated[idx].clientPhone,
+            clientAddress: generated[idx].clientAddress,
+            scheduleId: generated[idx].scheduleId,
+            calendarEventId: generated[idx].calendarEventId,
           ),
         );
       }
     });
     _saveDraft();
+  }
+
+  Future<void> _showMonthYearPickerDialog() async {
+    final months = [
+      'Enero', 'Febrero', 'Marzo', 'Abril',
+      'Mayo', 'Junio', 'Julio', 'Agosto',
+      'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+    ];
+    int selectedYear = _startDate.year;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => setDialogState(() => selectedYear--),
+              ),
+              Text(
+                '$selectedYear',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F2B48)),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => setDialogState(() => selectedYear++),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1.6,
+              ),
+              itemCount: 12,
+              itemBuilder: (context, idx) {
+                final monthNum = idx + 1;
+                final isCurrent = _startDate.year == selectedYear && _startDate.month == monthNum;
+                return InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() {
+                      _startDate = DateTime(selectedYear, monthNum, 1);
+                    });
+                    _generateVisits();
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isCurrent ? const Color(0xFF0F2B48) : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isCurrent ? const Color(0xFF0F2B48) : Colors.grey.shade300,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      months[idx],
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                        color: isCurrent ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   String _formatTimeOfDay(TimeOfDay tod) {
@@ -444,6 +558,8 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
         _weekday = 7;
         _fixedDay = 1;
         _secondFixedDay = 15;
+        _addToAgenda = false;
+        _serviceTypeController.text = 'Servicio de Control de Plagas';
       });
       _generateVisits();
     }
@@ -509,7 +625,26 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       conditions: _conditionsController.text.trim(),
       notes: _notesController.text.trim(),
       elaboratedBy: _repController.text.trim().isNotEmpty ? _repController.text.trim() : 'EJ Exterminadores',
-      visits: List.from(_visits),
+      isInAgenda: _addToAgenda,
+      visits: _visits.map((v) {
+        return ScheduledVisit(
+          id: v.id,
+          visitNumber: v.visitNumber,
+          date: v.date,
+          time: v.time,
+          serviceType: v.serviceType,
+          status: v.status,
+          clientBusinessName: business.isNotEmpty ? business : v.clientBusinessName,
+          clientContactName: contact.isNotEmpty ? contact : v.clientContactName,
+          clientPhone: _phoneController.text.trim().isNotEmpty ? _phoneController.text.trim() : v.clientPhone,
+          clientAddress: _addressController.text.trim().isNotEmpty ? _addressController.text.trim() : v.clientAddress,
+          scheduleId: _folioController.text.trim(),
+          calendarEventId: v.calendarEventId,
+          calendarId: v.calendarId,
+          isProspect: false,
+          isInAgenda: _addToAgenda,
+        );
+      }).toList(),
     );
 
     if (!mounted) return;
@@ -575,27 +710,56 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
                     onChanged: (_) => _saveDraft(),
                   ),
                   const SizedBox(height: 10),
-                  InkWell(
-                    onTap: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _startDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2035),
-                        helpText: 'Mes de Inicio del Cronograma',
-                      );
-                      if (picked != null) {
-                        setState(() => _startDate = picked);
-                        _generateVisits();
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Mes Inicial del Cronograma',
-                        prefixIcon: Icon(Icons.calendar_month_outlined, size: 20),
-                      ),
-                      child: Text(monthFormat.format(_startDate).toUpperCase(),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left, color: Color(0xFF0F2B48)),
+                          tooltip: 'Mes anterior',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            setState(() {
+                              _startDate = DateTime(_startDate.year, _startDate.month - 1, 1);
+                            });
+                            _generateVisits();
+                          },
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: _showMonthYearPickerDialog,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'Mes Inicial del Cronograma (Toca para elegir)',
+                                  style: TextStyle(fontSize: 10.5, color: Colors.grey),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  monthFormat.format(_startDate).toUpperCase(),
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right, color: Color(0xFF0F2B48)),
+                          tooltip: 'Siguiente mes',
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () {
+                            setState(() {
+                              _startDate = DateTime(_startDate.year, _startDate.month + 1, 1);
+                            });
+                            _generateVisits();
+                          },
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -1319,7 +1483,55 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          // 7. Opciones de Agenda y Recordatorios
+          Card(
+            elevation: 1.5,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: _addToAgenda ? const Color(0xFF0F2B48) : Colors.grey.shade300,
+                width: _addToAgenda ? 1.5 : 1,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _addToAgenda ? const Color(0xFF0F2B48).withOpacity(0.1) : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.event_available,
+                    color: _addToAgenda ? const Color(0xFF0F2B48) : Colors.grey,
+                  ),
+                ),
+                title: const Text(
+                  '¿Agregar visitas a mi Agenda de Trabajo?',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                ),
+                subtitle: Text(
+                  _addToAgenda
+                      ? '✓ Se programarán en tu Agenda y podrás sincronizarlas con Google Calendar.'
+                      : '○ Solo se generará el documento PDF del Cronograma sin llenar tu agenda.',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: _addToAgenda ? Colors.green.shade800 : Colors.grey.shade700,
+                    fontWeight: _addToAgenda ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+                value: _addToAgenda,
+                activeColor: const Color(0xFF0F2B48),
+                onChanged: (val) {
+                  setState(() => _addToAgenda = val);
+                  _saveDraft();
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
 
           // Botón Generar PDF
           SizedBox(

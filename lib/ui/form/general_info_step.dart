@@ -669,7 +669,7 @@ class _GeneralInfoStepState extends State<GeneralInfoStep> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  TextField(
+                   TextField(
                     controller: _recController,
                     maxLines: 2,
                     decoration: const InputDecoration(labelText: 'Recomendaciones de exclusión e higiene', border: OutlineInputBorder()),

@@ -252,17 +252,16 @@ class ResourcePdfService {
     );
 
     // ------------------------------------------
-    // PÁGINA 1: DIAGNÓSTICO, MATRIZ Y REGLAS
+    // DOCUMENTO FLUIDO Y CONTINUO (SIN ESPACIOS EN BLANCO ARTIFICIALES)
     // ------------------------------------------
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageTheme: pageTheme,
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // Encabezado Página 1
-              _buildHeader(
+        header: (context) {
+          if (context.pageNumber == 1) {
+            return pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 6),
+              child: _buildHeader(
                 logoImage: logoImage,
                 documentType: 'COMUNICADO OFICIAL DE MANEJO INTEGRADO DE PLAGAS',
                 title: notice.title,
@@ -270,9 +269,18 @@ class ResourcePdfService {
                 badge1: notice.category,
                 badge2: 'Bioseguridad y Exclusión',
               ),
-              pw.SizedBox(height: 5),
-
-              // Marco Normativo Oficial
+            );
+          } else {
+            return pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 6),
+              child: _buildPageTwoHeader(logoImage, notice),
+            );
+          }
+        },
+        footer: (context) => _buildFooterWithPage(context.pageNumber, context.pagesCount),
+        build: (context) {
+          return [
+            // Marco Normativo Oficial
               pw.Container(
                 width: double.infinity,
                 padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
@@ -518,29 +526,7 @@ class ResourcePdfService {
                 ),
               ),
 
-              pw.Spacer(),
-
-              // Pie de página 1
-              _buildFooterWithPage(1, 2),
-            ],
-          );
-        },
-      ),
-    );
-
-    // ------------------------------------------
-    // PÁGINA 2: BIOLOGÍA, FAQ Y CERTIFICACIÓN
-    // ------------------------------------------
-    pdf.addPage(
-      pw.Page(
-        pageTheme: pageTheme,
-        build: (context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // Encabezado compacto Página 2
-              _buildPageTwoHeader(logoImage, notice),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 5),
 
               // Cronograma y Fases Biológicas
               pw.Container(
@@ -732,12 +718,7 @@ class ResourcePdfService {
                 ),
               ),
 
-              pw.Spacer(),
-
-              // Pie de página 2
-              _buildFooterWithPage(2, 2),
-            ],
-          );
+            ];
         },
       ),
     );
@@ -786,7 +767,7 @@ class ResourcePdfService {
               borderRadius: pw.BorderRadius.circular(3),
             ),
             child: pw.Text(
-              'Página 2: Biología y Validación',
+              'Seguimiento Técnico y Normativo',
               style: pw.TextStyle(fontSize: 6.8, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             ),
           ),

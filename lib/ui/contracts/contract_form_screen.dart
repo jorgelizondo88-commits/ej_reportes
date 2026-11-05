@@ -241,21 +241,28 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
 
   void _recalculateEndDateAndVisits() {
     final newEnd = DateTime(_startDate.year, _startDate.month + _durationMonths, _startDate.day);
-    int multiplier = 1;
+    int visits = _durationMonths;
+    double monthly = 0.0;
+    final costVisit = double.tryParse(_costPerVisitController.text.trim()) ?? 0.0;
+
     if (_visitFrequency.startsWith('Semanal')) {
-      multiplier = 4;
+      visits = _durationMonths * 4;
+      monthly = costVisit * 4;
     } else if (_visitFrequency.startsWith('Quincenal')) {
-      multiplier = 2;
+      visits = _durationMonths * 2;
+      monthly = costVisit * 2;
     } else if (_visitFrequency.startsWith('Mensual')) {
-      multiplier = 1;
+      visits = _durationMonths * 1;
+      monthly = costVisit * 1;
     } else if (_visitFrequency.startsWith('Bimestral')) {
-      multiplier = (_durationMonths / 2).ceil();
+      visits = (_durationMonths / 2).ceil();
+      monthly = _durationMonths > 0 ? (costVisit * visits) / _durationMonths : 0.0;
+    } else if (_visitFrequency.startsWith('Trimestral')) {
+      visits = (_durationMonths / 3).ceil();
+      monthly = _durationMonths > 0 ? (costVisit * visits) / _durationMonths : 0.0;
     }
 
-    final visits = _durationMonths * multiplier;
-    final costVisit = double.tryParse(_costPerVisitController.text.trim()) ?? 0.0;
-    final monthly = costVisit * multiplier;
-    final total = monthly * _durationMonths;
+    final total = costVisit * visits;
 
     setState(() {
       _endDate = newEnd;
@@ -896,6 +903,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                               'Quincenal (2 visitas/mes)',
                               'Mensual (1 visita/mes)',
                               'Bimestral (1 visita c/2 meses)',
+                              'Trimestral (1 visita c/3 meses)',
                             ].map((f) => DropdownMenuItem(value: f, child: Text(f, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))).toList(),
                             onChanged: (val) {
                               if (val != null) {

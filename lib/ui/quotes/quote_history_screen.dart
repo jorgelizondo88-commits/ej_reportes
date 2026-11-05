@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/google_drive_sync_service.dart';
 
 class QuoteHistoryScreen extends StatefulWidget {
   const QuoteHistoryScreen({super.key});
@@ -67,22 +68,50 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
 
   Future<void> _shareQuote(Map<String, dynamic> quote) async {
     final filePath = quote['filePath'] as String?;
-    if (filePath == null) return;
-
-    final file = File(filePath);
-    if (!await file.exists()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('El archivo PDF de la cotización no se encontró en el dispositivo.')),
-        );
-      }
-      return;
-    }
+    File? file = (filePath != null && filePath.isNotEmpty) ? File(filePath) : null;
 
     final folio = (quote['folio'] ?? '').toString().trim();
     final clientTitle = (quote['businessName'] != null && quote['businessName'].toString().trim().isNotEmpty)
         ? quote['businessName'].toString().trim()
         : (quote['clientName'] ?? '').toString().trim();
+
+    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), descargarlo de Drive
+    if (file == null || !file.existsSync()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                SizedBox(width: 12),
+                Text('Descargando cotización desde Google Drive...'),
+              ],
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+
+      file = await GoogleDriveSyncService().downloadDocumentPdf(
+        clientName: clientTitle,
+        documentType: 'Cotización',
+        folio: folio,
+      );
+
+      if (file == null || !file.existsSync()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo encontrar la cotización en Google Drive.')),
+          );
+        }
+        return;
+      }
+
+      // Guardar la nueva ruta local permanente en la memoria del dispositivo
+      quote['filePath'] = file.path;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_quotesHistoryKey, jsonEncode(_allQuotes));
+    }
 
     final cleanFolio = folio.replaceAll(RegExp(r'[^\w-]'), '_');
     final cleanClient = clientTitle
@@ -96,7 +125,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
     try {
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/$fileName');
-      await file.copy(tempFile.path);
+      await file!.copy(tempFile.path);
 
       await Share.shareXFiles(
         [XFile(tempFile.path, name: fileName)],
@@ -105,36 +134,68 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       );
     } catch (_) {
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [XFile(file!.path)],
         text: 'Cotización de Servicios de Control de Plagas - Folio $folio',
         subject: 'Cotización: ${clientTitle.isNotEmpty ? clientTitle : folio}',
       );
     }
   }
 
-  void _openViewer(Map<String, dynamic> quote) {
+  Future<void> _openViewer(Map<String, dynamic> quote) async {
     final filePath = quote['filePath'] as String?;
-    if (filePath == null) return;
-
-    final file = File(filePath);
-    if (!file.existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El archivo PDF no se encuentra disponible.')),
-      );
-      return;
-    }
+    File? file = (filePath != null && filePath.isNotEmpty) ? File(filePath) : null;
 
     final folio = (quote['folio'] ?? '').toString().trim();
     final clientTitle = (quote['businessName'] != null && quote['businessName'].toString().trim().isNotEmpty)
         ? quote['businessName'].toString().trim()
         : (quote['clientName'] ?? '').toString().trim();
 
+    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), descargarlo de Drive
+    if (file == null || !file.existsSync()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                SizedBox(width: 12),
+                Text('Descargando cotización desde Google Drive...'),
+              ],
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+
+      file = await GoogleDriveSyncService().downloadDocumentPdf(
+        clientName: clientTitle,
+        documentType: 'Cotización',
+        folio: folio,
+      );
+
+      if (file == null || !file.existsSync()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo encontrar el archivo en Google Drive.')),
+          );
+        }
+        return;
+      }
+
+      // Guardar la nueva ruta local permanente para aperturas instantáneas futuras
+      quote['filePath'] = file.path;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_quotesHistoryKey, jsonEncode(_allQuotes));
+    }
+
+    if (!mounted) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => _SavedQuoteViewerScreen(
           title: 'Cotización: $folio',
-          filePath: filePath,
+          filePath: file!.path,
           folio: folio,
           clientName: clientTitle,
         ),

@@ -10,7 +10,8 @@ import 'advisory_detail_screen.dart';
 import 'company_presentation_screen.dart';
 
 class ResourcesHubScreen extends StatefulWidget {
-  const ResourcesHubScreen({super.key});
+  final int initialTab;
+  const ResourcesHubScreen({super.key, this.initialTab = 0});
 
   @override
   State<ResourcesHubScreen> createState() => _ResourcesHubScreenState();
@@ -53,7 +54,7 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 2, vsync: this, initialIndex: widget.initialTab.clamp(0, 1));
   }
 
   @override
@@ -399,6 +400,53 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
           ),
         ),
 
+        // Sección Rápida: Documentos Clave para Clientes (Acceso Directo y Compartir)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
+          child: Row(
+            children: [
+              const Icon(Icons.flash_on, size: 18, color: Colors.amber),
+              const SizedBox(width: 6),
+              const Expanded(
+                child: Text(
+                  'Documentos Rápidos para Clientes (WhatsApp / PDF)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 136,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            scrollDirection: Axis.horizontal,
+            children: [
+              _clientDocShortcutCard(
+                emoji: '🪳',
+                title: 'Fiprax y Gel (Cucaracha)',
+                subtitle: 'Efecto Cascada y Dinámica del Nido',
+                noticeId: 'cucaracha_fiprax_gel',
+                badgeColor: Colors.deepOrange,
+              ),
+              _clientDocShortcutCard(
+                emoji: '🏢',
+                title: 'Fumigación de Oficinas',
+                subtitle: 'Bioseguridad y Equipos Electrónicos',
+                noticeId: 'oficinas_corporativo_general',
+                badgeColor: Colors.blue.shade800,
+              ),
+              _clientDocShortcutCard(
+                emoji: '🏡',
+                title: 'Casa Habitación',
+                subtitle: 'Guía Familiar y Mascotas',
+                noticeId: 'residencial_casa_habitacion',
+                badgeColor: Colors.teal.shade700,
+              ),
+            ],
+          ),
+        ),
+
         // Selector horizontal de categorías
         SizedBox(
           height: 48,
@@ -577,6 +625,82 @@ class _ResourcesHubScreenState extends State<ResourcesHubScreen> with SingleTick
       child: Text(
         text,
         style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color),
+      ),
+    );
+  }
+
+  Widget _clientDocShortcutCard({
+    required String emoji,
+    required String title,
+    required String subtitle,
+    required String noticeId,
+    required Color badgeColor,
+  }) {
+    final notice = _allNotices.firstWhere(
+      (n) => n.id == noticeId,
+      orElse: () => _allNotices.first,
+    );
+
+    return Container(
+      width: 260,
+      margin: const EdgeInsets.only(right: 10, bottom: 4),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AdvisoryDetailScreen(notice: notice)),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 18)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F2B48)),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.share, size: 16, color: Color(0xFF0F2B48)),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Compartir PDF',
+                      onPressed: () => _quickShareNoticePdf(notice),
+                    ),
+                  ],
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Toca para ver o enviar',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: badgeColor),
+                    ),
+                    const Icon(Icons.chevron_right, size: 15, color: Colors.grey),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

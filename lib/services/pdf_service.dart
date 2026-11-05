@@ -237,6 +237,7 @@ class PdfService {
     pdf.addPage(
       pw.MultiPage(
         pageTheme: pageTheme,
+        maxPages: 100, // Soporte garantizado para reportes extensos con más de 160 fotos
         header: (context) => _buildHeader(report, logoImage),
         footer: (context) => _buildFooter(context, report),
         build: (context) => [
@@ -255,7 +256,7 @@ class PdfService {
 
           // Galería calibrada para 8 fotos por hoja (2 x 4)
           if (loadedEvidences.isNotEmpty) ...[
-            _buildEvidenceGallery(loadedEvidences),
+            ..._buildEvidenceGallery(loadedEvidences),
             pw.SizedBox(height: 6),
           ],
 
@@ -620,7 +621,9 @@ class PdfService {
     ];
   }
 
-  static pw.Widget _buildEvidenceGallery(List<_PreparedEvidence> evidences) {
+  static List<pw.Widget> _buildEvidenceGallery(List<_PreparedEvidence> evidences) {
+    if (evidences.isEmpty) return [];
+
     List<pw.Widget> rows = [];
     for (int i = 0; i < evidences.length; i += 2) {
       final left = evidences[i];
@@ -641,27 +644,22 @@ class PdfService {
       );
     }
 
-    if (rows.isEmpty) return pw.Container();
-
     final firstRow = rows.first;
     final otherRows = rows.skip(1).toList();
 
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.Container(
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              _buildSectionHeader('Evidencia Fotográfica del Servicio'),
-              pw.SizedBox(height: 6),
-              firstRow,
-            ],
-          ),
+    return [
+      pw.Container(
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            _buildSectionHeader('Evidencia Fotográfica del Servicio'),
+            pw.SizedBox(height: 6),
+            firstRow,
+          ],
         ),
-        ...otherRows,
-      ],
-    );
+      ),
+      ...otherRows,
+    ];
   }
 
   static pw.Widget _buildPhotoCard(_PreparedEvidence item) {

@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/contract_model.dart';
+import '../../services/google_drive_sync_service.dart';
 import 'contract_preview_screen.dart';
 
 class ContractHistoryScreen extends StatefulWidget {
@@ -143,7 +144,7 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
     }
   }
 
-  void _openViewer(Map<String, dynamic> item) {
+  void _openViewer(Map<String, dynamic> item) async {
     try {
       final model = ContractModel.fromMap(item);
       Navigator.push(
@@ -151,19 +152,61 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
         MaterialPageRoute(builder: (context) => ContractPreviewScreen(contract: model)),
       );
     } catch (_) {
-      final pdfPath = item['pdfPath'] as String?;
+      String? pdfPath = item['pdfPath'] as String?;
+      File? file = (pdfPath != null && pdfPath.isNotEmpty) ? File(pdfPath) : null;
+
+      if (file == null || !file.existsSync()) {
+        final client = (item['businessName'] ?? item['clientName'] ?? '').toString().trim();
+        final folio = (item['folio'] ?? '').toString().trim();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                  SizedBox(width: 12),
+                  Text('Descargando contrato desde Google Drive...'),
+                ],
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+
+        file = await GoogleDriveSyncService().downloadDocumentPdf(
+          clientName: client,
+          documentType: 'Contrato',
+          folio: folio,
+        );
+
+        if (file != null && file.existsSync()) {
+          item['pdfPath'] = file.path;
+          pdfPath = file.path;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_contractsHistoryKey, jsonEncode(_allContracts));
+        }
+      }
+
       if (pdfPath != null && File(pdfPath).existsSync()) {
+        if (!mounted) return;
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => _SavedContractViewer(
               title: 'Contrato: ${item['folio']}',
-              filePath: pdfPath,
+              filePath: pdfPath!,
               folio: (item['folio'] ?? '').toString(),
               clientName: (item['businessName'] ?? item['clientName'] ?? '').toString(),
             ),
           ),
         );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo encontrar el archivo del contrato.')),
+          );
+        }
       }
     }
   }

@@ -927,6 +927,148 @@ class AdvisoryNoticeModel {
         ],
         technicalDisclaimer: 'EJ Exterminadores utiliza rodenticidas anticoagulantes de última generación formulados en cebos parafinados de alta palatabilidad, resguardados en estaciones inviolables con llave de seguridad. El control total es un esfuerzo conjunto entre la reposición técnica de cebos y el sellado físico de accesos por parte de la empresa.',
       ),
+
+      // 13. CUCARACHA ALEMANA: FIPRONIL Y CEBO EN GEL
+      AdvisoryNoticeModel(
+        id: 'cucaracha_fiprax_gel',
+        title: 'Tratamiento con Fipronil y Cebo en Gel: Dinámica del Nido y Efecto Cascada',
+        category: 'Dinámica de Plagas',
+        targetAudience: 'Administradores de Oficina, Encargados de Cocineta y Clientes en Tratamiento de Cucaracha Alemana',
+        iconEmoji: '🪳',
+        objective: 'Explicar el funcionamiento científico del tratamiento no repelente (Fipronil) y cebo en gel contra la cucaracha alemana, la importancia del efecto cascada en el nido y las fases esperadas durante el proceso de erradicación.',
+        problemStatement: 'La cucaracha alemana (Blattella germanica) es una plaga gregaria que anida en grietas profundas, motores y bisagras. Usar insecticidas comerciales de lata o productos con olor provoca su dispersión a escritorios y computadoras. Nuestro tratamiento especializado no las ahuyenta: las infecta para que lleven el principio activo al corazón del nido.',
+        regulatoryFramework: 'NOM-256-SSA1-2012 (Control y Manejo de Plagas Urbanas), Registros Sanitarios COFEPRIS y Principios de Manejo Integrado de Plagas (MIP).',
+        dosAndDonts: [
+          NoticeDoDontItem(
+            badPractice: 'Rociar insecticidas en aerosol (Raid, H24) sobre las cucarachas o muebles tratados.',
+            goodPractice: 'Dejar que las cucarachas caminen libremente sobre las zonas tratadas para que contagien a las demás en el nido.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Limpiar o retirar con trapo húmedo los puntos de gel aplicados en bisagras y muebles.',
+            goodPractice: 'Respetar las gotas de gel; son alimento tóxico letal que las ninfas y hembras consumirán durante días.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Trapear con cloro y desengrasante los zoclos y bases de muebles en las primeras 48 horas.',
+            goodPractice: 'Trapear solo el centro de pisos; mantener intacta la película residual de Fipronil en orillas y partes bajas.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Dejar café, azúcar, pan o galletas expuestos en cajones y estantes de cocineta.',
+            goodPractice: 'Guardar todo alimento en recipientes herméticos rígidos; si no hay comida disponible, el consumo de cebo se multiplica.',
+          ),
+        ],
+        mandatoryRules: [
+          'EFECTO CASCADA ACTIVO: Las cucarachas son coprófagas y necrófagas; las heces y el cuerpo de una cucaracha que pisó Fipronil envenenan a 10 más dentro de la pared o estantería.',
+          'PROHIBIDO EL USO DE AEROSOLES: Cualquier insecticida de lata anula el efecto del Fipronil, repele a la plaga y la dispersa a computadoras y escritorios limpios.',
+          'RESIDUALIDAD Y NO LAVADO: No lave con químicos desinfectantes las esquinas, bisagras ni zoclos donde se colocó el producto durante al menos 5 días.',
+          'LIMPIEZA DE GRASA Y MIGAJAS: La grasa de la cocineta degrada el insecticida. Limpie derrames de grasa antes de la aplicación y mantenga cajones sin residuos de alimentos.',
+          'CICLO BIOLÓGICO Y SEGUNDO MES: La cáscara del huevo (ooteca) es impenetrable. Las crías que nazcan en 15-20 días morirán al pisar el producto; el seguimiento mensual es indispensable.',
+        ],
+        facilityRecommendations: [
+          'SELLADO DE GRIETAS EN ESTANTERÍAS: Sellar con silicón o acrilastic las uniones entre azulejos, fórmica y marcos de estantes para eliminar refugios térmicos.',
+          'REVISIÓN DE EMPAQUES DE REFRIGERADOR Y MICROONDAS: Limpiar con regularidad la parte trasera de motores y sellos de goma, donde el calor atrae a las ninfas.',
+          'DESPEJE TEMPORAL DE ALACENAS: Durante la aplicación, despejar insumos alimenticios y vajillas en cajas cerradas para permitir acceso total a esquinas.',
+          'ELIMINACIÓN DE HUMEDAD: Reparar fugas en llaves y secar el fregadero al terminar la jornada; las cucarachas resisten semanas sin comida pero solo días sin agua.',
+        ],
+        biologicalPhases: [
+          NoticePhaseItem(
+            phaseName: 'Fase 1: Desalojo e Intoxicación del Nido',
+            timeFrame: 'Días 1 a 3',
+            description: 'Cucarachas salen descoordinadas y aturdidas a la vista. Es señal de que el sistema nervioso fue afectado y el químico está trabajando.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 2: Quiebre de la Población Adulta',
+            timeFrame: 'Días 4 a 14',
+            description: 'Mortalidad masiva (80-90%). Las cucarachas mueren dentro de sus refugios contagiando a ninfas que nunca salieron a la superficie.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 3: Eclosión de Ninfas y Control Total',
+            timeFrame: 'Día 15 a 45',
+            description: 'Nacen crías diminutas de los huevecillos residuales. Al comer el gel fresco o caminar sobre el Fipronil, mueren sin llegar a reproducirse.',
+          ),
+        ],
+        faqs: [
+          NoticeFaqItem(
+            question: '¿Por qué sigo viendo cucarachas vivas después de la fumigación?',
+            answer: 'Fipronil no mata de golpe porque necesita tiempo para que la cucaracha vuelva al nido viva y contagie al resto de la colonia. La muerte retardada es exactamente lo que garantiza la erradicación total.',
+          ),
+          NoticeFaqItem(
+            question: '¿El Fiprax y el gel manchan o huelen mal en la oficina?',
+            answer: 'No. Es una fórmula en suspensión concentrada base agua y geles específicos, inodoros, que no emiten vapores tóxicos ni manchan muebles, aptos para áreas de trabajo y preparación de alimentos.',
+          ),
+        ],
+        technicalDisclaimer: 'El tratamiento con Fipronil y cebo en gel de EJ Exterminadores es la tecnología de mayor precisión para cucaracha alemana. La efectividad depende de evitar el uso de insecticidas comerciales que repelan a la plaga y mantener estrictas medidas de higiene en cocinetas y escritorios.',
+      ),
+
+      // 14. PROTOCOLO GENERAL EN OFICINAS Y ÁREAS CORPORATIVAS
+      AdvisoryNoticeModel(
+        id: 'oficinas_corporativo_general',
+        title: 'Protocolo de Fumigación en Oficinas: Bioseguridad y Buenas Prácticas Corporativas',
+        category: 'Oficinas y Corporativos',
+        targetAudience: 'Dirección Administrativa, Recursos Humanos, Seguridad Operativa y Personal de Oficina',
+        iconEmoji: '🏢',
+        objective: 'Establecer los lineamientos de preparación previa, cuidados de equipo electrónico y dinámica post-servicio para fumigaciones seguras y discretas en oficinas corporativas.',
+        problemStatement: 'En entornos de oficina conviven cableados estructurados, servidores, alfombras y áreas de café. Una fumigación improvisada con productos de olor fuerte o aspersión descuidada puede dañar equipos electrónicos o incomodar al personal. Se requiere un protocolo técnico estandarizado de bajo impacto ambiental y alta residualidad.',
+        regulatoryFramework: 'NOM-256-SSA1-2012, Ley General de Salud, Estándares de Inocuidad y Bioseguridad en Espacios Cerrados de Trabajo.',
+        dosAndDonts: [
+          NoticeDoDontItem(
+            badPractice: 'Dejar tazas de café, cubiertos, fruta o botanas destapadas sobre escritorios antes del servicio.',
+            goodPractice: 'Guardar tazas, termos y alimentos en bolsas cerradas o dentro de gavetas durante la noche de aplicación.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Dejar cerros de papeles, carpetas y cajas amontonados pegados a los zoclos del suelo.',
+            goodPractice: 'Despejar los perímetros del piso 10 cm para permitir el paso uniforme del aplicador técnico.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Rociar líquidos directamente sobre contactos, teclados, switches de red o pantallas.',
+            goodPractice: 'Tratar áreas electrónicas exclusivamente con cebos no conductores o trampas adhesivas de monitoreo.',
+          ),
+          NoticeDoDontItem(
+            badPractice: 'Lavar a fondo alfombras o zoclos al día siguiente de la fumigación.',
+            goodPractice: 'Aspirar con regularidad el centro de las alfombras pero evitar trapear las orillas tratadas en 72 horas.',
+          ),
+        ],
+        mandatoryRules: [
+          'DESPEJE DE ÁREAS PERIMETRALES: Retirar mochilas, papelería y cajas del suelo junto a las paredes para garantizar una franja perimetral de aplicación continua.',
+          'ALIMENTOS Y COCINETA DESPEJADA: Todos los insumos de café, galletas, azúcar y vajilla deben guardarse protegidos o retirarse de la cocineta durante el servicio.',
+          'TIEMPO DE REINGRESO SEGURO: El personal puede reingresar tras un periodo mínimo de ventilación de 60 a 90 minutos después de concluida la aplicación.',
+          'EQUIPOS ELECTRÓNICOS PROTEGIDOS: No se aplican líquidos sobre computadoras ni cableados. Estas zonas se protegen con geles discretos y trampas de monitoreo.',
+          'PROHIBIDO GUARDAR COMIDA ABIERTA EN CAJONES: Los escritorios no son alacenas. La comida abierta en cajones es la causa #1 de plagas en oficinas corporativas.',
+        ],
+        facilityRecommendations: [
+          'ORDEN Y LIMPIEZA DE CABLEADO: Emplear canaletas cerradas para cables de red y luz, evitando marañas en el suelo donde los insectos encuentran refugio.',
+          'MANEJO DIARIO DE BASURA: Retirar la basura con restos de comida (orgánica) al final de cada jornada laboral; no dejar botes con restos durante el fin de semana.',
+          'MANTENIMIENTO DE MINISPLITS: Sellar las perforaciones en muros y zoclos por donde entran las mangueras de condensación y tuberías de gas.',
+          'PLAFONES Y FALSOS TECHOS: Revisar periódicamente el entretecho para asegurar que no haya filtraciones de humedad ni acumulación de polvo.',
+        ],
+        biologicalPhases: [
+          NoticePhaseItem(
+            phaseName: 'Fase 1: Barrera Perimetral e Inactivación',
+            timeFrame: 'Días 1 a 3',
+            description: 'Fijación de la película residual en zoclos y colocación de cebos discretos en cocinetas y áreas de archivo.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 2: Quiebre de Focos Ocultos',
+            timeFrame: 'Días 4 a 15',
+            description: 'Eliminación de plagas que intenten colonizar desde naves contiguas, ductos de clima o plafones.',
+          ),
+          NoticePhaseItem(
+            phaseName: 'Fase 3: Protección Continua y Monitoreo',
+            timeFrame: 'Día 16 a 30',
+            description: 'Mantenimiento de la bioseguridad en las instalaciones, con inspección preventiva programada en la siguiente visita.',
+          ),
+        ],
+        faqs: [
+          NoticeFaqItem(
+            question: '¿Nuestras computadoras o documentos corren algún riesgo?',
+            answer: 'Ninguno. EJ Exterminadores utiliza aspersores de precisión con gota controlada en zoclos bajos y cebo en gel en áreas sensibles. No se mojan escritorios, pantallas ni equipos eléctricos.',
+          ),
+          NoticeFaqItem(
+            question: '¿El producto deja olor o manchas en alfombras y muros?',
+            answer: 'No. Los productos seleccionados para oficinas corporativas son microencapsulados o suspensiones concentradas base agua, inodoros y que no dejan residuos visibles ni manchan.',
+          ),
+        ],
+        technicalDisclaimer: 'Las formulaciones aplicadas por EJ Exterminadores cuentan con registro COFEPRIS para uso en interiores comerciales e industriales, con nula volatilidad y máxima seguridad para el personal corporativo una vez respetado el tiempo de reingreso.',
+      ),
     ];
   }
 }

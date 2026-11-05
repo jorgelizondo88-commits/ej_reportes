@@ -36,6 +36,8 @@ class ClientModel {
   final String facilityType;
   final bool hasTraps;
   final List<ClientTrapTemplate> defaultTraps; // Inventario fijo de trampas
+  final String? driveFolderId;
+  final String? driveFolderShareUrl; // Enlace público de solo lectura para el cliente
 
   ClientModel({
     required this.id,
@@ -47,6 +49,8 @@ class ClientModel {
     required this.facilityType,
     required this.hasTraps,
     this.defaultTraps = const [],
+    this.driveFolderId,
+    this.driveFolderShareUrl,
   });
 
   Map<String, dynamic> toMap() {
@@ -60,6 +64,8 @@ class ClientModel {
       'facilityType': facilityType,
       'hasTraps': hasTraps,
       'defaultTraps': defaultTraps.map((t) => t.toMap()).toList(),
+      'driveFolderId': driveFolderId,
+      'driveFolderShareUrl': driveFolderShareUrl,
     };
   }
 
@@ -75,9 +81,39 @@ class ClientModel {
       hasTraps: map['hasTraps'] ?? false,
       defaultTraps: map['defaultTraps'] != null
           ? (map['defaultTraps'] as List)
-          .map((item) => ClientTrapTemplate.fromMap(item))
-          .toList()
+              .map((item) => ClientTrapTemplate.fromMap(item))
+              .toList()
           : [],
+      driveFolderId: map['driveFolderId'],
+      driveFolderShareUrl: map['driveFolderShareUrl'],
+    );
+  }
+
+  ClientModel copyWith({
+    String? id,
+    String? businessName,
+    String? contactName,
+    String? address,
+    String? phone,
+    String? email,
+    String? facilityType,
+    bool? hasTraps,
+    List<ClientTrapTemplate>? defaultTraps,
+    String? driveFolderId,
+    String? driveFolderShareUrl,
+  }) {
+    return ClientModel(
+      id: id ?? this.id,
+      businessName: businessName ?? this.businessName,
+      contactName: contactName ?? this.contactName,
+      address: address ?? this.address,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      facilityType: facilityType ?? this.facilityType,
+      hasTraps: hasTraps ?? this.hasTraps,
+      defaultTraps: defaultTraps ?? this.defaultTraps,
+      driveFolderId: driveFolderId ?? this.driveFolderId,
+      driveFolderShareUrl: driveFolderShareUrl ?? this.driveFolderShareUrl,
     );
   }
 }

@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/schedule_model.dart';
+import '../../services/calendar_sync_service.dart';
 import '../../services/schedule_pdf_service.dart';
 
 class SchedulePreviewScreen extends StatefulWidget {
@@ -21,6 +22,41 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
   static const String _schedulesHistoryKey = 'ej_schedules_history_list';
   bool _isSaved = false;
   bool _isSaving = false;
+  bool _isSyncing = false;
+
+  Future<void> _syncToGoogleCalendar() async {
+    setState(() => _isSyncing = true);
+    try {
+      final service = CalendarSyncService();
+      int synced = 0;
+      for (final v in widget.schedule.visits) {
+        final res = await service.syncVisitToGoogleCalendar(
+          v,
+          clientNameOverride: widget.schedule.clientBusinessName,
+          phoneOverride: widget.schedule.clientPhone,
+          addressOverride: widget.schedule.clientAddress,
+        );
+        if (res != null) synced++;
+      }
+      await _saveToHistory();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡$synced visitas sincronizadas con Google Calendar!'),
+            backgroundColor: const Color(0xFF0F2B48),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al sincronizar: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncing = false);
+    }
+  }
 
   @override
   void initState() {
@@ -74,10 +110,105 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
         'recurrenceDescription': widget.schedule.recurrenceDescription,
         'totalVisits': widget.schedule.totalVisits,
         'completedVisits': widget.schedule.completedVisits,
+        'isInAgenda': widget.schedule.isInAgenda,
         'filePath': file.path,
         'scheduleData': widget.schedule.toMap(),
         'savedAt': DateTime.now().toIso8601String(),
       };
+
+      // Prevención de Duplicados: Si ya existen visitas activas en agenda para este mismo cliente
+      if (widget.schedule.isInAgenda) {
+        final existingWithSameClient = historyList.where((item) {
+          if (item['folio'] == widget.schedule.folio) return false;
+          final bName = (item['businessName'] ?? '').toString().trim().toLowerCase();
+          final currentBName = widget.schedule.clientBusinessName.trim().toLowerCase();
+          final hasInAgenda = item['isInAgenda'] == true ||
+              (item['scheduleData'] != null && item['scheduleData']['isInAgenda'] == true);
+          return currentBName.isNotEmpty && bName == currentBName && hasInAgenda;
+        }).toList();
+
+        if (existingWithSameClient.isNotEmpty && mounted) {
+          final choice = await showDialog<String>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Cliente con visitas previas', style: TextStyle(fontSize: 16))),
+                ],
+              ),
+              content: Text(
+                'Detectamos que "${widget.schedule.clientBusinessName}" ya tiene visitas activas en tu Agenda de Trabajo.\n\n'
+                '¿Cómo deseas manejar esta nueva póliza?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'keep_both'),
+                  child: const Text('Mantener ambas'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'replace_old'),
+                  child: const Text('Reemplazar anteriores', style: TextStyle(color: Colors.red)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(context, 'only_pdf'),
+                  child: const Text('Solo guardar PDF'),
+                ),
+              ],
+            ),
+          );
+
+          if (choice == 'only_pdf') {
+            entry['isInAgenda'] = false;
+            final mapData = entry['scheduleData'] as Map<String, dynamic>;
+            mapData['isInAgenda'] = false;
+          } else if (choice == 'replace_old') {
+            for (final oldItem in existingWithSameClient) {
+              oldItem['isInAgenda'] = false;
+              if (oldItem['scheduleData'] != null) {
+                (oldItem['scheduleData'] as Map<String, dynamic>)['isInAgenda'] = false;
+              }
+            }
+          }
+        }
+      }
+
+      // Sincronización opcional con Google Calendar
+      if (entry['isInAgenda'] == true && mounted) {
+        final syncGoogle = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('¿Sincronizar con Google Calendar?'),
+            content: Text(
+              'Has agregado estas ${widget.schedule.visits.length} visitas a tu Agenda de la app.\n\n'
+              '¿Deseas sincronizarlas también con Google Calendar en tu teléfono y PC?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Solo en la App'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Sí, con Google Calendar'),
+              ),
+            ],
+          ),
+        );
+
+        if (syncGoogle == true) {
+          final syncService = CalendarSyncService();
+          for (final v in widget.schedule.visits) {
+            final evId = await syncService.syncVisitToGoogleCalendar(v);
+            if (evId != null) v.calendarEventId = evId;
+          }
+          entry['scheduleData'] = widget.schedule.toMap();
+        }
+      }
 
       final existingIndex = historyList.indexWhere((item) => item['folio'] == widget.schedule.folio);
       if (existingIndex >= 0) {
@@ -170,6 +301,17 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: _isSyncing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync),
+            tooltip: 'Sincronizar visitas con Google Calendar',
+            onPressed: _isSyncing ? null : _syncToGoogleCalendar,
+          ),
           IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Compartir Calendario',

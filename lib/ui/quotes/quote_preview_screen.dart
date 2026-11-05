@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/quote_model.dart';
 import '../../services/quote_pdf_service.dart';
+import '../../services/google_drive_sync_service.dart';
 
 class QuotePreviewScreen extends StatefulWidget {
   final QuoteModel quote;
@@ -84,6 +85,15 @@ class _QuotePreviewScreenState extends State<QuotePreviewScreen> {
       }
 
       await prefs.setString(_quotesHistoryKey, jsonEncode(historyList));
+
+      // Sincronización automática en segundo plano con Google Drive (Offline-First)
+      GoogleDriveSyncService().enqueueAndSync(
+        clientName: widget.quote.clientBusinessName.isNotEmpty ? widget.quote.clientBusinessName : widget.quote.clientContactName,
+        documentType: 'Cotización',
+        folio: widget.quote.quoteFolio,
+        localFilePath: file.path,
+        fileName: _buildFileName(),
+      );
 
       if (mounted) {
         setState(() {
