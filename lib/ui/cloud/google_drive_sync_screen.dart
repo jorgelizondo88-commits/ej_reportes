@@ -5,7 +5,8 @@ import '../../models/cloud_sync_item_model.dart';
 import '../../services/google_drive_sync_service.dart';
 
 class GoogleDriveSyncScreen extends StatefulWidget {
-  const GoogleDriveSyncScreen({super.key});
+  final VoidCallback? onDataRestored;
+  const GoogleDriveSyncScreen({super.key, this.onDataRestored});
 
   @override
   State<GoogleDriveSyncScreen> createState() => _GoogleDriveSyncScreenState();
@@ -328,7 +329,7 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('¿Restaurar datos desde Google Drive?'),
-        content: const Text('Esta acción descargará todos los clientes, reportes, contratos y configuraciones guardadas en tu Google Drive hacia este dispositivo. Ideal al cambiar de teléfono.'),
+        content: const Text('Esta acción descargará todos los clientes, reportes, cotizaciones, contratos y configuraciones guardadas en tu Google Drive hacia este dispositivo.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
           ElevatedButton(
@@ -342,14 +343,40 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
 
     if (confirm == true) {
       setState(() => _isLoading = true);
-      final ok = await _driveService.restoreDatabaseFromCloud();
+      final result = await _driveService.restoreDatabaseFromCloud();
       setState(() => _isLoading = false);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(ok ? '¡Datos restaurados con éxito! Todo tu catálogo está listo.' : 'No se encontró archivo de respaldo en tu Drive.'),
-            backgroundColor: ok ? Colors.green.shade800 : Colors.orange.shade800,
+        if (result.success) {
+          widget.onDataRestored?.call();
+          _checkStatusAndLoadQueue();
+        }
+
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  result.success ? Icons.check_circle : Icons.info_outline,
+                  color: result.success ? Colors.green.shade700 : Colors.orange.shade800,
+                  size: 26,
+                ),
+                const SizedBox(width: 8),
+                Text(result.success ? 'Restauración Exitosa' : 'Aviso de Respaldo'),
+              ],
+            ),
+            content: Text(result.message, style: const TextStyle(fontSize: 13, height: 1.4)),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F2B48),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
           ),
         );
       }

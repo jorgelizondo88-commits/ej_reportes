@@ -321,6 +321,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           setState(() {
             _selectedModuleIndex = index;
           });
+          _loadAllData();
         },
       ),
     );
@@ -488,7 +489,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
       case 8:
         return const ResourcesHubScreen();
       case 9:
-        return const GoogleDriveSyncScreen();
+        return GoogleDriveSyncScreen(onDataRestored: _loadAllData);
       default:
         return _buildSplitReportsView();
     }

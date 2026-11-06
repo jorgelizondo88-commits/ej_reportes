@@ -14,6 +14,24 @@ import '../models/trap_layout_model.dart';
 import 'client_service.dart';
 import 'trap_layout_pdf_service.dart';
 
+class DatabaseRestoreResult {
+  final bool success;
+  final String message;
+  final int clientsCount;
+  final int reportsCount;
+  final int quotesCount;
+  final int contractsCount;
+
+  const DatabaseRestoreResult({
+    required this.success,
+    required this.message,
+    this.clientsCount = 0,
+    this.reportsCount = 0,
+    this.quotesCount = 0,
+    this.contractsCount = 0,
+  });
+}
+
 class _GoogleAuthClient extends http.BaseClient {
   final Map<String, String> _headers;
   final http.Client _client = http.Client();
@@ -77,9 +95,18 @@ class GoogleDriveSyncService {
       final account = await _googleSignIn.signIn();
       _currentUser = account;
       if (account != null) {
-        // En cuanto inicia sesión, procesar cola pendiente y respaldar base de datos
         processQueue();
-        backupDatabaseToCloud();
+        final prefs = await SharedPreferences.getInstance();
+        final rawClients = prefs.getString('ej_saved_clients_list');
+        final rawReports = prefs.getString('ej_reports_history_list');
+        final bool hasLocalData = (rawClients != null && rawClients.isNotEmpty && rawClients != '[]') ||
+            (rawReports != null && rawReports.isNotEmpty && rawReports != '[]');
+        if (!hasLocalData) {
+          debugPrint('Dispositivo sin datos locales. Auto-restaurando desde Google Drive...');
+          await restoreDatabaseFromCloud();
+        } else {
+          backupDatabaseToCloud();
+        }
       } else {
         lastError = 'La ventana de selección se cerró sin seleccionar una cuenta.';
       }
@@ -113,7 +140,16 @@ class GoogleDriveSyncService {
       _currentUser = account;
       if (account != null) {
         processQueue();
-        backupDatabaseToCloud();
+        final prefs = await SharedPreferences.getInstance();
+        final rawClients = prefs.getString('ej_saved_clients_list');
+        final rawReports = prefs.getString('ej_reports_history_list');
+        final bool hasLocalData = (rawClients != null && rawClients.isNotEmpty && rawClients != '[]') ||
+            (rawReports != null && rawReports.isNotEmpty && rawReports != '[]');
+        if (!hasLocalData) {
+          await restoreDatabaseFromCloud();
+        } else {
+          backupDatabaseToCloud();
+        }
       }
       return account;
     } catch (e) {
@@ -600,17 +636,39 @@ class GoogleDriveSyncService {
 
   // --- RESPALDO MAESTRO DE BASE DE DATOS A GOOGLE DRIVE ---
 
-  Future<bool> backupDatabaseToCloud() async {
+  Future<bool> backupDatabaseToCloud({bool force = false}) async {
     final api = await _getDriveApi();
     if (api == null) return false;
 
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final rawClients = prefs.getString('ej_saved_clients_list');
+      final rawReports = prefs.getString('ej_reports_history_list');
+      final rawQuotes = prefs.getString('ej_quotes_history_list');
+      final rawContracts = prefs.getString('ej_contracts_history_list');
+
+      int count(String? raw) {
+        if (raw == null || raw.isEmpty || raw == '[]') return 0;
+        try {
+          final d = jsonDecode(raw);
+          if (d is List) return d.length;
+        } catch (_) {}
+        return 0;
+      }
+
+      final int localCount = count(rawClients) + count(rawReports) + count(rawQuotes) + count(rawContracts);
+
+      // Si el dispositivo local está vacío y no se está forzando, NO sobreescribir la nube para proteger el respaldo
+      if (localCount == 0 && !force) {
+        debugPrint('backupDatabaseToCloud omitido: este dispositivo está vacío y no debe sobreescribir la nube.');
+        return false;
+      }
+
       final rootId = await _getRootFolderId(api);
       if (rootId == null) return false;
 
       final backupFolderId = await _getOrCreateFolder(api, 'Respaldo_Sistema_App', parentId: rootId);
 
-      final prefs = await SharedPreferences.getInstance();
       final allKeys = prefs.getKeys();
       final Map<String, dynamic> snapshot = {};
 
@@ -658,37 +716,128 @@ class GoogleDriveSyncService {
   }
 
   // Restaurar base de datos desde Google Drive en otro dispositivo
-  Future<bool> restoreDatabaseFromCloud() async {
+  Future<DatabaseRestoreResult> restoreDatabaseFromCloud() async {
     final api = await _getDriveApi();
-    if (api == null) return false;
+    if (api == null) {
+      return const DatabaseRestoreResult(
+        success: false,
+        message: 'No hay conexión activa con Google Drive. Inicia sesión primero.',
+      );
+    }
 
     try {
       final rootId = await _getRootFolderId(api);
-      if (rootId == null) return false;
+      if (rootId == null) {
+        return const DatabaseRestoreResult(
+          success: false,
+          message: 'No se pudo acceder a la carpeta de EJ Exterminadores en Drive.',
+        );
+      }
 
       final backupFolderId = await _getOrCreateFolder(api, 'Respaldo_Sistema_App', parentId: rootId);
 
-      final q = "name = 'ej_reportes_base_datos.json' and '$backupFolderId' in parents and trashed = false";
-      final search = await api.files.list(q: q, $fields: 'files(id)');
+      // Buscar el archivo de respaldo en la carpeta oficial o en cualquier parte del Drive
+      String q = "name = 'ej_reportes_base_datos.json' and '$backupFolderId' in parents and trashed = false";
+      var search = await api.files.list(q: q, $fields: 'files(id, name, modifiedTime)');
 
       if (search.files == null || search.files!.isEmpty) {
-        return false;
+        search = await api.files.list(
+          q: "name = 'ej_reportes_base_datos.json' and trashed = false",
+          $fields: 'files(id, name, modifiedTime)',
+        );
+      }
+
+      if (search.files == null || search.files!.isEmpty) {
+        return const DatabaseRestoreResult(
+          success: false,
+          message: 'No se encontró archivo de respaldo maestro en tu Google Drive.\n\nPor favor abre la app en tu teléfono celular (donde tienes tus clientes y reportes), entra a "Nube Google Drive" y pulsa "Respaldar Base de Datos Maestra" para subirlo a la nube.',
+        );
       }
 
       final fileId = search.files!.first.id!;
-      final drive.Media downloaded = await api.files.get(
+
+      Future<Map<String, dynamic>?> downloadAndParse(drive.Media mediaStream) async {
+        try {
+          final List<int> bytes = [];
+          await for (final chunk in mediaStream.stream) {
+            bytes.addAll(chunk);
+          }
+          final content = utf8.decode(bytes);
+          final Map<String, dynamic> parsed = jsonDecode(content);
+          return parsed['data'] != null ? Map<String, dynamic>.from(parsed['data']) : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final drive.Media mainDownloaded = await api.files.get(
         fileId,
         downloadOptions: drive.DownloadOptions.fullMedia,
       ) as drive.Media;
 
-      final List<int> bytes = [];
-      await for (final chunk in downloaded.stream) {
-        bytes.addAll(chunk);
+      Map<String, dynamic>? data = await downloadAndParse(mainDownloaded);
+
+      int countItems(dynamic raw) {
+        if (raw == null) return 0;
+        if (raw is List) return raw.length;
+        if (raw is String && raw.isNotEmpty && raw != '[]') {
+          try {
+            final decoded = jsonDecode(raw);
+            if (decoded is List) return decoded.length;
+          } catch (_) {}
+        }
+        return 0;
       }
 
-      final content = utf8.decode(bytes);
-      final Map<String, dynamic> parsed = jsonDecode(content);
-      final Map<String, dynamic> data = parsed['data'] ?? {};
+      int clients = countItems(data?['ej_saved_clients_list']);
+      int reports = countItems(data?['ej_reports_history_list']);
+      int quotes = countItems(data?['ej_quotes_history_list']);
+      int contracts = countItems(data?['ej_contracts_history_list']);
+
+      // Si la versión actual está vacía (ej. si el Mac sin datos la sobreescribió al conectar),
+      // buscar automáticamente en el historial de revisiones de Google Drive
+      if (clients == 0 && reports == 0 && quotes == 0) {
+        try {
+          final revs = await api.revisions.list(fileId);
+          if (revs.revisions != null && revs.revisions!.isNotEmpty) {
+            for (final rev in revs.revisions!.reversed) {
+              if (rev.id == null) continue;
+              try {
+                final drive.Media revMedia = await api.revisions.get(
+                  fileId,
+                  rev.id!,
+                  downloadOptions: drive.DownloadOptions.fullMedia,
+                ) as drive.Media;
+
+                final revData = await downloadAndParse(revMedia);
+                final c = countItems(revData?['ej_saved_clients_list']);
+                final r = countItems(revData?['ej_reports_history_list']);
+                final q = countItems(revData?['ej_quotes_history_list']);
+                final k = countItems(revData?['ej_contracts_history_list']);
+
+                if (c > 0 || r > 0 || q > 0) {
+                  data = revData;
+                  clients = c;
+                  reports = r;
+                  quotes = q;
+                  contracts = k;
+                  debugPrint('¡Recuperada versión previa con $c clientes y $r reportes!');
+                  break;
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (e) {
+          debugPrint('Error inspeccionando revisiones de Drive: $e');
+        }
+      }
+
+      if (data == null || (clients == 0 && reports == 0 && quotes == 0 && contracts == 0)) {
+        return const DatabaseRestoreResult(
+          success: false,
+          message: 'El archivo de respaldo en tu Drive aún no contiene clientes ni reportes.\n\nPor favor ve a tu teléfono (donde tienes tus datos), abre la app en "Nube Google Drive" y pulsa "Respaldar Base de Datos Maestra".',
+        );
+      }
 
       final prefs = await SharedPreferences.getInstance();
       for (final entry in data.entries) {
@@ -703,15 +852,25 @@ class GoogleDriveSyncService {
           await prefs.setBool(key, val);
         } else if (val is double) {
           await prefs.setDouble(key, val);
-        } else if (val is List<String>) {
-          await prefs.setStringList(key, val);
+        } else if (val is List) {
+          await prefs.setStringList(key, val.map((e) => e.toString()).toList());
         }
       }
 
-      return true;
+      return DatabaseRestoreResult(
+        success: true,
+        message: '¡Datos restaurados con éxito!\n\n• $clients Clientes\n• $reports Reportes de servicio\n• $quotes Cotizaciones\n• $contracts Pólizas y Contratos',
+        clientsCount: clients,
+        reportsCount: reports,
+        quotesCount: quotes,
+        contractsCount: contracts,
+      );
     } catch (e) {
       debugPrint('Error restaurando base de datos desde Drive: $e');
-      return false;
+      return DatabaseRestoreResult(
+        success: false,
+        message: 'Error al procesar la restauración: $e',
+      );
     }
   }
 
