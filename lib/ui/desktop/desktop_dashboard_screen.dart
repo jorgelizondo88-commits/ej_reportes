@@ -55,6 +55,138 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   String _searchFilter = '';
   String? _selectedReportClientFilter;
   String? _selectedQuoteClientFilter;
+  bool _isLoadingPdf = false;
+  String? _loadingDocId;
+  final Set<String> _failedDownloads = {};
+
+  Future<void> _onSelectReport(Map<String, dynamic> item) async {
+    final folio = (item['folio'] ?? 'S_N').toString();
+    final clientName = (item['businessName'] ?? item['clientName'] ?? '').toString();
+    final currentPath = item['filePath'] as String?;
+    final localExists = currentPath != null && currentPath.isNotEmpty && File(currentPath).existsSync();
+
+    _failedDownloads.remove('Reporte-$folio');
+
+    setState(() {
+      _selectedReport = item;
+      _isLoadingPdf = !localExists;
+      _loadingDocId = 'Reporte-$folio';
+    });
+
+    if (!localExists) {
+      try {
+        final downloaded = await _driveService.downloadDocumentPdf(
+          clientName: clientName,
+          documentType: 'Reporte',
+          folio: folio,
+        );
+        if (mounted && _selectedReport != null && _selectedReport!['folio'].toString() == folio) {
+          if (downloaded != null && downloaded.existsSync()) {
+            setState(() {
+              _selectedReport!['filePath'] = downloaded.path;
+              item['filePath'] = downloaded.path;
+              _isLoadingPdf = false;
+              _loadingDocId = null;
+            });
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('ej_reports_history_list', jsonEncode(_reports));
+            } catch (_) {}
+          } else {
+            setState(() {
+              _failedDownloads.add('Reporte-$folio');
+              _isLoadingPdf = false;
+              _loadingDocId = null;
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted && _selectedReport != null && _selectedReport!['folio'].toString() == folio) {
+          setState(() {
+            _failedDownloads.add('Reporte-$folio');
+            _isLoadingPdf = false;
+            _loadingDocId = null;
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _onSelectQuote(Map<String, dynamic> item) async {
+    final folio = (item['folio'] ?? 'S_N').toString();
+    final clientName = (item['businessName'] ?? item['clientName'] ?? '').toString();
+    final currentPath = item['filePath'] as String?;
+    final localExists = currentPath != null && currentPath.isNotEmpty && File(currentPath).existsSync();
+
+    _failedDownloads.remove('Cotización-$folio');
+
+    setState(() {
+      _selectedQuote = item;
+      _isLoadingPdf = !localExists;
+      _loadingDocId = 'Cotización-$folio';
+    });
+
+    if (!localExists) {
+      try {
+        final downloaded = await _driveService.downloadDocumentPdf(
+          clientName: clientName,
+          documentType: 'Cotización',
+          folio: folio,
+        );
+        if (mounted && _selectedQuote != null && _selectedQuote!['folio'].toString() == folio) {
+          if (downloaded != null && downloaded.existsSync()) {
+            setState(() {
+              _selectedQuote!['filePath'] = downloaded.path;
+              item['filePath'] = downloaded.path;
+              _isLoadingPdf = false;
+              _loadingDocId = null;
+            });
+            try {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('ej_quotes_history_list', jsonEncode(_quotes));
+            } catch (_) {}
+          } else {
+            setState(() {
+              _failedDownloads.add('Cotización-$folio');
+              _isLoadingPdf = false;
+              _loadingDocId = null;
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted && _selectedQuote != null && _selectedQuote!['folio'].toString() == folio) {
+          setState(() {
+            _failedDownloads.add('Cotización-$folio');
+            _isLoadingPdf = false;
+            _loadingDocId = null;
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _onSelectInvoice(InvoiceModel inv) async {
+    setState(() {
+      _selectedInvoice = inv;
+      _selectedInvoiceFile = null;
+      _isLoadingInvoiceFile = true;
+    });
+    try {
+      final file = await _driveService.downloadInvoicePdf(inv);
+      if (mounted && _selectedInvoice?.id == inv.id) {
+        setState(() {
+          _selectedInvoiceFile = file;
+          _isLoadingInvoiceFile = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && _selectedInvoice?.id == inv.id) {
+        setState(() {
+          _isLoadingInvoiceFile = false;
+        });
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -111,6 +243,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
         if (_reports.isNotEmpty && _selectedReport == null) {
           _selectedReport = _reports.first;
+          _onSelectReport(_reports.first);
         }
         if (_quotes.isNotEmpty && _selectedQuote == null) {
           _selectedQuote = _quotes.first;
@@ -323,7 +456,19 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           setState(() {
             _selectedModuleIndex = index;
           });
-          _loadAllData();
+          if (index == 0 && _selectedReport != null) {
+            final p = _selectedReport!['filePath'] as String?;
+            if (p == null || !File(p).existsSync()) {
+              _onSelectReport(_selectedReport!);
+            }
+          } else if (index == 1 && _selectedQuote != null) {
+            final p = _selectedQuote!['filePath'] as String?;
+            if (p == null || !File(p).existsSync()) {
+              _onSelectQuote(_selectedQuote!);
+            }
+          } else if (index == 3 && _selectedInvoice != null && (_selectedInvoiceFile == null || !_selectedInvoiceFile!.existsSync())) {
+            _onSelectInvoice(_selectedInvoice!);
+          }
         },
       ),
     );
@@ -653,7 +798,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                 ),
                               ),
                               trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.black38),
-                              onTap: () => setState(() => _selectedReport = item),
+                              onTap: () => _onSelectReport(item),
                             );
                           },
                         ),
@@ -847,7 +992,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                 ),
                               ),
                               trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.black38),
-                              onTap: () => setState(() => _selectedQuote = item),
+                              onTap: () => _onSelectQuote(item),
                             );
                           },
                         ),
@@ -957,20 +1102,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                   style: TextStyle(color: isPending ? const Color(0xFFBE123C) : const Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              onTap: () async {
-                                setState(() {
-                                  _selectedInvoice = inv;
-                                  _selectedInvoiceFile = null;
-                                  _isLoadingInvoiceFile = true;
-                                });
-                                final file = await _driveService.downloadInvoicePdf(inv);
-                                if (mounted) {
-                                  setState(() {
-                                    _selectedInvoiceFile = file;
-                                    _isLoadingInvoiceFile = false;
-                                  });
-                                }
-                              },
+                              onTap: () => _onSelectInvoice(inv),
                             );
                           },
                         ),
@@ -1018,7 +1150,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                     label: const Text('Enviar WhatsApp', style: TextStyle(fontSize: 11)),
                                     onPressed: () {
                                       final msg = Uri.encodeComponent('Hola estimado cliente de ${_selectedInvoice!.clientName}, le compartimos el recordatorio de su factura pendiente de pago con EJ Exterminadores.');
-                                      final phone = (_selectedInvoice!.clientPhone ?? '').replaceAll(RegExp(r'\D'), '');
+                                      final phone = _selectedInvoice!.clientPhone.replaceAll(RegExp(r'\D'), '');
                                       final url = phone.isNotEmpty ? 'https://wa.me/$phone?text=$msg' : 'https://wa.me/?text=$msg';
                                       launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
                                     },
@@ -1048,9 +1180,31 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                         // Previsualizador PDF
                         Expanded(
                           child: _isLoadingInvoiceFile
-                              ? const Center(child: CircularProgressIndicator())
+                              ? Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox(
+                                        width: 36,
+                                        height: 36,
+                                        child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF0F2B48)),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'Descargando factura ${_selectedInvoice?.folio ?? ''} desde Google Drive...',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48)),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'Se abrirá automáticamente al terminar.',
+                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                      ),
+                                    ],
+                                  ),
+                                )
                               : (_selectedInvoiceFile != null && _selectedInvoiceFile!.existsSync())
                                   ? PdfPreview(
+                                      key: ValueKey('invoice-${_selectedInvoice!.id}-${_selectedInvoiceFile!.path}-${_selectedInvoiceFile!.existsSync() ? _selectedInvoiceFile!.lengthSync() : 0}'),
                                       build: (format) => _selectedInvoiceFile!.readAsBytesSync(),
                                       allowPrinting: true,
                                       allowSharing: false,
@@ -1061,17 +1215,19 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                       child: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Icon(Icons.picture_as_pdf, size: 48, color: Colors.black26),
-                                          const SizedBox(height: 8),
-                                          const Text('Cargando documento desde Google Drive...'),
+                                          const Icon(Icons.cloud_off_outlined, size: 48, color: Color(0xFF94A3B8)),
+                                          const SizedBox(height: 10),
+                                          const Text('No se pudo descargar la factura desde Google Drive.', style: TextStyle(fontSize: 12, color: Colors.black54)),
                                           const SizedBox(height: 12),
-                                          ElevatedButton(
-                                            onPressed: () async {
-                                              setState(() => _isLoadingInvoiceFile = true);
-                                              final f = await _driveService.downloadInvoicePdf(_selectedInvoice!);
-                                              if (mounted) setState(() { _selectedInvoiceFile = f; _isLoadingInvoiceFile = false; });
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
+                                            icon: const Icon(Icons.refresh, size: 16),
+                                            label: const Text('Reintentar descarga'),
+                                            onPressed: () {
+                                              if (_selectedInvoice != null) {
+                                                _onSelectInvoice(_selectedInvoice!);
+                                              }
                                             },
-                                            child: const Text('Descargar y Abrir PDF'),
                                           ),
                                         ],
                                       ),
@@ -1096,6 +1252,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   }) {
     File? file = (filePath != null && filePath.isNotEmpty) ? File(filePath) : null;
     final exists = file != null && file.existsSync();
+    final isCurrentlyLoading = _isLoadingPdf && _loadingDocId == '$documentType-$folio';
 
     return Column(
       children: [
@@ -1132,7 +1289,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                     OutlinedButton.icon(
                       icon: const Icon(Icons.print, size: 14),
                       label: const Text('Imprimir', style: TextStyle(fontSize: 11)),
-                      onPressed: () => Printing.layoutPdf(onLayout: (format) => file!.readAsBytesSync()),
+                      onPressed: () => Printing.layoutPdf(onLayout: (format) => file.readAsBytesSync()),
                     ),
                 ],
               ),
@@ -1142,46 +1299,61 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
         // Visor de PDF
         Expanded(
-          child: exists
-              ? PdfPreview(
-                  build: (format) => file!.readAsBytesSync(),
-                  allowPrinting: true,
-                  allowSharing: false,
-                  canChangeOrientation: false,
-                  canChangePageFormat: false,
-                )
-              : Center(
+          child: isCurrentlyLoading
+              ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.cloud_download_outlined, size: 48, color: Color(0xFF1E6091)),
-                      const SizedBox(height: 10),
-                      Text('El archivo físico de este $documentType está en tu Google Drive.', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                      const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
-                        icon: const Icon(Icons.download, size: 16),
-                        label: const Text('Descargar desde Google Drive'),
-                        onPressed: () async {
-                          final downloaded = await _driveService.downloadDocumentPdf(
-                            clientName: clientName,
-                            documentType: documentType,
-                            folio: folio,
-                          );
-                          if (downloaded != null && mounted) {
-                            setState(() {
-                              if (documentType == 'Reporte' && _selectedReport != null) {
-                                _selectedReport!['filePath'] = downloaded.path;
-                              } else if (documentType == 'Cotización' && _selectedQuote != null) {
-                                _selectedQuote!['filePath'] = downloaded.path;
-                              }
-                            });
-                          }
-                        },
+                      const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF0F2B48)),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Descargando $documentType $folio desde Google Drive...',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48)),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Se abrirá automáticamente al terminar.',
+                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                       ),
                     ],
                   ),
-                ),
+                )
+              : exists
+                  ? PdfPreview(
+                      key: ValueKey('$documentType-$folio-${file.path}-${file.existsSync() ? file.lengthSync() : 0}'),
+                      build: (format) => file.readAsBytesSync(),
+                      allowPrinting: true,
+                      allowSharing: false,
+                      canChangeOrientation: false,
+                      canChangePageFormat: false,
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.cloud_off_outlined, size: 48, color: Color(0xFF94A3B8)),
+                          const SizedBox(height: 10),
+                          Text('No se encontró el archivo físico de este $documentType en Google Drive.', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Reintentar descarga desde Drive'),
+                            onPressed: () {
+                              if (documentType == 'Reporte' && _selectedReport != null) {
+                                _onSelectReport(_selectedReport!);
+                              } else if (documentType == 'Cotización' && _selectedQuote != null) {
+                                _onSelectQuote(_selectedQuote!);
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
         ),
       ],
     );
