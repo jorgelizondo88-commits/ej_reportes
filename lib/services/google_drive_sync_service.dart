@@ -1446,6 +1446,23 @@ class GoogleDriveSyncService {
         } catch (_) {}
       }
 
+      // Actualizar también la lista en caché si existe
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('ej_cached_invoices');
+        if (raw != null && raw.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(raw);
+          final updatedList = list.map((item) {
+            if (item['id'] == invoice.id) {
+              item['status'] = 'paid';
+              item['parentFolderId'] = targetFolderId;
+            }
+            return item;
+          }).toList();
+          await prefs.setString('ej_cached_invoices', jsonEncode(updatedList));
+        }
+      } catch (_) {}
+
       return true;
     } catch (e) {
       debugPrint('Error marcando factura como pagada: $e');
@@ -1480,6 +1497,23 @@ class GoogleDriveSyncService {
         } catch (_) {}
       }
 
+      // Actualizar también la lista en caché si existe
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('ej_cached_invoices');
+        if (raw != null && raw.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(raw);
+          final updatedList = list.map((item) {
+            if (item['id'] == invoice.id) {
+              item['status'] = 'canceled';
+              item['parentFolderId'] = targetFolderId;
+            }
+            return item;
+          }).toList();
+          await prefs.setString('ej_cached_invoices', jsonEncode(updatedList));
+        }
+      } catch (_) {}
+
       return true;
     } catch (e) {
       debugPrint('Error marcando factura como cancelada: $e');
@@ -1513,6 +1547,23 @@ class GoogleDriveSyncService {
           );
         } catch (_) {}
       }
+
+      // Actualizar también la lista en caché si existe
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('ej_cached_invoices');
+        if (raw != null && raw.isNotEmpty) {
+          final List<dynamic> list = jsonDecode(raw);
+          final updatedList = list.map((item) {
+            if (item['id'] == invoice.id) {
+              item['status'] = 'pending';
+              item['parentFolderId'] = targetFolderId;
+            }
+            return item;
+          }).toList();
+          await prefs.setString('ej_cached_invoices', jsonEncode(updatedList));
+        }
+      } catch (_) {}
 
       return true;
     } catch (e) {

@@ -55,6 +55,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   String _searchFilter = '';
   String? _selectedReportClientFilter;
   String? _selectedQuoteClientFilter;
+  String _selectedInvoiceStatusFilter = 'pending';
   bool _isLoadingPdf = false;
   String? _loadingDocId;
   final Set<String> _failedDownloads = {};
@@ -249,7 +250,8 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           _selectedQuote = _quotes.first;
         }
         if (_invoices.isNotEmpty && _selectedInvoice == null) {
-          _selectedInvoice = _invoices.first;
+          final pending = _invoices.where((i) => i.status == 'pending').toList();
+          _selectedInvoice = pending.isNotEmpty ? pending.first : _invoices.first;
         }
       });
     }
@@ -262,6 +264,16 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           _invoices = freshInvoices;
           final freshPending = freshInvoices.where((i) => i.status == 'pending').toList();
           _pendingInvoiceCount = freshPending.length;
+          if (_selectedInvoiceStatusFilter == 'pending') {
+            if (_selectedInvoice != null && _selectedInvoice!.status != 'pending') {
+              if (freshPending.isNotEmpty) {
+                _onSelectInvoice(freshPending.first);
+              } else {
+                _selectedInvoice = null;
+                _selectedInvoiceFile = null;
+              }
+            }
+          }
         });
       }
     }
@@ -455,6 +467,9 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         onTap: () {
           setState(() {
             _selectedModuleIndex = index;
+            if (index == 3) {
+              _selectedInvoiceStatusFilter = 'pending';
+            }
           });
           if (index == 0 && _selectedReport != null) {
             final p = _selectedReport!['filePath'] as String?;
@@ -466,8 +481,18 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
             if (p == null || !File(p).existsSync()) {
               _onSelectQuote(_selectedQuote!);
             }
-          } else if (index == 3 && _selectedInvoice != null && (_selectedInvoiceFile == null || !_selectedInvoiceFile!.existsSync())) {
-            _onSelectInvoice(_selectedInvoice!);
+          } else if (index == 3) {
+            final pendingInvs = _invoices.where((i) => i.status == 'pending').toList();
+            if (pendingInvs.isNotEmpty) {
+              if (_selectedInvoice == null || _selectedInvoice!.status != 'pending') {
+                _onSelectInvoice(pendingInvs.first);
+              } else if (_selectedInvoiceFile == null || !_selectedInvoiceFile!.existsSync()) {
+                _onSelectInvoice(_selectedInvoice!);
+              }
+            } else {
+              _selectedInvoice = null;
+              _selectedInvoiceFile = null;
+            }
           }
         },
       ),
@@ -1027,11 +1052,21 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   // --- VISTA DIVIDIDA: FACTURACIÓN CFDI ---
   Widget _buildSplitInvoicesView() {
     final filtered = _invoices.where((inv) {
+      // 1. Filtro por estado
+      if (_selectedInvoiceStatusFilter != 'all' && inv.status != _selectedInvoiceStatusFilter) {
+        return false;
+      }
+
+      // 2. Filtro por buscador
       if (_searchFilter.isEmpty) return true;
       return inv.clientName.toLowerCase().contains(_searchFilter) ||
           inv.folio.toLowerCase().contains(_searchFilter) ||
           inv.pdfName.toLowerCase().contains(_searchFilter);
     }).toList();
+
+    final pendingCount = _invoices.where((i) => i.status == 'pending').length;
+    final paidCount = _invoices.where((i) => i.status == 'paid').length;
+    final canceledCount = _invoices.where((i) => i.status == 'canceled').length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
@@ -1048,23 +1083,141 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Encabezado con selector de estado (Pendientes, Pagadas, Canceladas, Todas)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: const BoxDecoration(
                     color: Color(0xFFF8FAFC),
                     border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Facturas en Google Drive', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48))),
-                      Text('${filtered.length} archivos', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      const Icon(Icons.filter_list, size: 16, color: Color(0xFF0F2B48)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedInvoiceStatusFilter,
+                            isDense: true,
+                            isExpanded: true,
+                            icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF0F2B48)),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
+                            items: [
+                              DropdownMenuItem(
+                                value: 'pending',
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(color: Color(0xFFE11D48), shape: BoxShape.circle),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('Pendientes de Pago ($pendingCount)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                                  ],
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'paid',
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(color: Color(0xFF059669), shape: BoxShape.circle),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('Pagadas ($paidCount)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                                  ],
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'canceled',
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(color: Color(0xFF64748B), shape: BoxShape.circle),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('Canceladas ($canceledCount)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                                  ],
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'all',
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(color: Color(0xFF3B82F6), shape: BoxShape.circle),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('Todas las facturas (${_invoices.length})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() {
+                                  _selectedInvoiceStatusFilter = val;
+                                  final matching = _invoices.where((inv) {
+                                    if (val != 'all' && inv.status != val) return false;
+                                    return true;
+                                  }).toList();
+
+                                  if (matching.isNotEmpty) {
+                                    if (_selectedInvoice == null || (val != 'all' && _selectedInvoice!.status != val)) {
+                                      _onSelectInvoice(matching.first);
+                                    }
+                                  } else {
+                                    _selectedInvoice = null;
+                                    _selectedInvoiceFile = null;
+                                  }
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${filtered.length}',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 Expanded(
                   child: filtered.isEmpty
-                      ? const Center(child: Text('No hay facturas en Drive.', style: TextStyle(fontSize: 12, color: Colors.black45)))
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.inbox_outlined, size: 40, color: Colors.black26),
+                              const SizedBox(height: 8),
+                              Text(
+                                _selectedInvoiceStatusFilter == 'pending'
+                                    ? 'No hay facturas pendientes de pago.'
+                                    : _selectedInvoiceStatusFilter == 'paid'
+                                        ? 'No hay facturas pagadas registradas.'
+                                        : _selectedInvoiceStatusFilter == 'canceled'
+                                            ? 'No hay facturas canceladas.'
+                                            : 'No se encontraron facturas en Drive.',
+                                style: const TextStyle(fontSize: 12, color: Colors.black45),
+                              ),
+                            ],
+                          ),
+                        )
                       : ListView.separated(
                           itemCount: filtered.length,
                           separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
@@ -1072,6 +1225,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                             final inv = filtered[i];
                             final isSel = _selectedInvoice != null && _selectedInvoice!.id == inv.id;
                             final isPending = inv.status == 'pending';
+                            final isCanceled = inv.status == 'canceled';
 
                             return ListTile(
                               dense: true,
@@ -1093,13 +1247,35 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                               trailing: Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: isPending ? const Color(0xFFFFF1F2) : const Color(0xFFECFDF5),
+                                  color: isPending
+                                      ? const Color(0xFFFFF1F2)
+                                      : isCanceled
+                                          ? const Color(0xFFF1F5F9)
+                                          : const Color(0xFFECFDF5),
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: isPending ? const Color(0xFFFECDD3) : const Color(0xFFA7F3D0)),
+                                  border: Border.all(
+                                    color: isPending
+                                        ? const Color(0xFFFECDD3)
+                                        : isCanceled
+                                            ? const Color(0xFFCBD5E1)
+                                            : const Color(0xFFA7F3D0),
+                                  ),
                                 ),
                                 child: Text(
-                                  isPending ? 'Pendiente' : 'Pagada',
-                                  style: TextStyle(color: isPending ? const Color(0xFFBE123C) : const Color(0xFF047857), fontSize: 10, fontWeight: FontWeight.bold),
+                                  isPending
+                                      ? 'Pendiente'
+                                      : isCanceled
+                                          ? 'Cancelada'
+                                          : 'Pagada',
+                                  style: TextStyle(
+                                    color: isPending
+                                        ? const Color(0xFFBE123C)
+                                        : isCanceled
+                                            ? const Color(0xFF64748B)
+                                            : const Color(0xFF047857),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                               onTap: () => _onSelectInvoice(inv),
@@ -1149,13 +1325,23 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                     icon: const Icon(Icons.share, size: 14),
                                     label: const Text('Enviar WhatsApp', style: TextStyle(fontSize: 11)),
                                     onPressed: () {
-                                      final msg = Uri.encodeComponent('Hola estimado cliente de ${_selectedInvoice!.clientName}, le compartimos el recordatorio de su factura pendiente de pago con EJ Exterminadores.');
+                                      final msg = Uri.encodeComponent('Hola estimado cliente de ${_selectedInvoice!.clientName}, le compartimos el recordatorio de su factura con EJ Exterminadores.');
                                       final phone = _selectedInvoice!.clientPhone.replaceAll(RegExp(r'\D'), '');
                                       final url = phone.isNotEmpty ? 'https://wa.me/$phone?text=$msg' : 'https://wa.me/?text=$msg';
                                       launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
                                     },
                                   ),
                                   const SizedBox(width: 8),
+
+                                  // Botón Imprimir si el archivo está listo
+                                  if (_selectedInvoiceFile != null && _selectedInvoiceFile!.existsSync()) ...[
+                                    OutlinedButton.icon(
+                                      icon: const Icon(Icons.print, size: 14),
+                                      label: const Text('Imprimir', style: TextStyle(fontSize: 11)),
+                                      onPressed: () => Printing.layoutPdf(onLayout: (format) => _selectedInvoiceFile!.readAsBytesSync()),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
 
                                   // Botón Marcar Pagada si está pendiente
                                   if (_selectedInvoice!.status == 'pending')
@@ -1164,12 +1350,65 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                       icon: const Icon(Icons.check_circle_outline, size: 14),
                                       label: const Text('Marcar Pagada', style: TextStyle(fontSize: 11)),
                                       onPressed: () async {
-                                        final ok = await _driveService.markInvoiceAsPaid(_selectedInvoice!);
+                                        final target = _selectedInvoice!;
+                                        final ok = await _driveService.markInvoiceAsPaid(target);
                                         if (ok && mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('¡Factura movida a Pagadas en Google Drive!'), backgroundColor: Colors.green));
+                                          setState(() {
+                                            final idx = _invoices.indexWhere((inv) => inv.id == target.id);
+                                            if (idx != -1) {
+                                              _invoices[idx] = _invoices[idx].copyWith(status: 'paid');
+                                            }
+                                            _pendingInvoiceCount = _invoices.where((i) => i.status == 'pending').length;
+                                            if (_selectedInvoiceStatusFilter == 'pending') {
+                                              final remainingPending = _invoices.where((i) => i.status == 'pending').toList();
+                                              if (remainingPending.isNotEmpty) {
+                                                _onSelectInvoice(remainingPending.first);
+                                              } else {
+                                                _selectedInvoice = null;
+                                                _selectedInvoiceFile = null;
+                                              }
+                                            }
+                                          });
                                           _loadAllData();
                                         }
                                       },
+                                    ),
+
+                                  if (_selectedInvoice!.status == 'paid')
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFECFDF5),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.check_circle, size: 14, color: Color(0xFF047857)),
+                                          SizedBox(width: 4),
+                                          Text('Factura Pagada', style: TextStyle(color: Color(0xFF047857), fontSize: 11, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    ),
+
+                                  if (_selectedInvoice!.status == 'canceled')
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.cancel, size: 14, color: Color(0xFF64748B)),
+                                          SizedBox(width: 4),
+                                          Text('Factura Cancelada', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
                                     ),
                                 ],
                               ),
