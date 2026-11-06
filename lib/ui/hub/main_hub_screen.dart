@@ -71,6 +71,28 @@ class _MainHubScreenState extends State<MainHubScreen> {
         _layoutCount = layoutsList.length;
       });
     }
+
+    // Auto-sincronización bidireccional silenciosa en segundo plano con Google Drive
+    if (GoogleDriveSyncService().isSignedIn) {
+      GoogleDriveSyncService().pullAndMergeCloudDatabase().then((merged) async {
+        final discovered = await GoogleDriveSyncService().discoverDriveDocuments();
+        if ((merged || discovered > 0) && mounted) {
+          final p = await SharedPreferences.getInstance();
+          final rR = p.getString('ej_reports_history_list');
+          final rQ = p.getString('ej_quotes_history_list');
+          final cL = await ClientService().getSavedClients();
+          final repL = (rR != null && rR.isNotEmpty) ? jsonDecode(rR) : [];
+          final quoL = (rQ != null && rQ.isNotEmpty) ? jsonDecode(rQ) : [];
+          if (mounted) {
+            setState(() {
+              _clientCount = cL.length;
+              _reportCount = repL.length;
+              _quoteCount = quoL.length;
+            });
+          }
+        }
+      });
+    }
   }
 
   @override

@@ -27,6 +27,15 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
   void initState() {
     super.initState();
     _loadHistory();
+    // Auto-sincronizar en segundo plano al entrar
+    if (GoogleDriveSyncService().isSignedIn) {
+      GoogleDriveSyncService().pullAndMergeCloudDatabase().then((merged) async {
+        final discovered = await GoogleDriveSyncService().discoverDriveDocuments();
+        if ((merged || discovered > 0) && mounted) {
+          _loadHistory();
+        }
+      });
+    }
   }
 
   Future<void> _loadHistory() async {

@@ -867,7 +867,7 @@ class GoogleDriveSyncService {
 
     // Si se subió algún archivo, actualizar automáticamente el respaldo maestro en Drive
     if (pendingItems.any((i) => i.status == 'synced')) {
-      backupDatabaseToCloud();
+      await backupDatabaseToCloud(force: true);
     }
   }
 
