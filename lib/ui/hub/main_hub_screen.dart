@@ -16,6 +16,7 @@ import '../schedule/schedule_history_screen.dart';
 import '../resources/resources_hub_screen.dart';
 import '../resources/company_presentation_screen.dart';
 import '../../services/trap_layout_service.dart';
+import '../../services/google_drive_sync_service.dart';
 import '../layouts/trap_layouts_history_screen.dart';
 import '../layouts/trap_layout_canvas_screen.dart';
 import '../cloud/google_drive_sync_screen.dart';

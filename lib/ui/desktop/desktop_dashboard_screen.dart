@@ -283,7 +283,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
       _driveService.pullAndMergeCloudDatabase().then((merged) async {
         final discovered = await _driveService.discoverDriveDocuments();
         if ((merged || discovered > 0) && mounted) {
-          _loadData();
+          _loadAllData();
         }
       });
     }
