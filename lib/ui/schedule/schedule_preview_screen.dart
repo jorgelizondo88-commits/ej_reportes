@@ -219,6 +219,18 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
 
       await prefs.setString(_schedulesHistoryKey, jsonEncode(historyList));
 
+      // Actualizar contador del folio consecutivo para que el próximo sea siempre mayor
+      final match = RegExp(r'(\d+)$').firstMatch(widget.schedule.folio);
+      if (match != null) {
+        final num = int.tryParse(match.group(1)!);
+        if (num != null) {
+          final current = prefs.getInt('ej_consecutive_schedule_counter') ?? 0;
+          if (num >= current) {
+            await prefs.setInt('ej_consecutive_schedule_counter', num);
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
           _isSaved = true;

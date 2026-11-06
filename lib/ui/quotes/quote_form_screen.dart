@@ -149,6 +149,30 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
     }
   }
 
+  Future<int> _calculateNextQuoteNumber() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawHistory = prefs.getString('ej_quotes_history_list');
+    int maxNumber = 0;
+    if (rawHistory != null && rawHistory.isNotEmpty) {
+      try {
+        final List<dynamic> list = jsonDecode(rawHistory);
+        for (final item in list) {
+          final folioStr = (item['folio'] ?? item['quoteFolio'] ?? '').toString();
+          final match = RegExp(r'(\d+)$').firstMatch(folioStr);
+          if (match != null) {
+            final num = int.tryParse(match.group(1)!);
+            if (num != null && num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    final counterFromPrefs = prefs.getInt(_quoteFolioCounterKey) ?? 0;
+    final nextNumber = (maxNumber > counterFromPrefs ? maxNumber : counterFromPrefs) + 1;
+    return nextNumber;
+  }
+
   Future<void> _initDraftOrNew() async {
     final prefs = await SharedPreferences.getInstance();
     final rawDraft = prefs.getString(_quoteDraftKey);
@@ -156,9 +180,9 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
     if (rawDraft != null && rawDraft.isNotEmpty) {
       _restoreDraft(rawDraft);
     } else {
-      final int currentCounter = prefs.getInt(_quoteFolioCounterKey) ?? 1;
+      final nextNumber = await _calculateNextQuoteNumber();
       setState(() {
-        _folioController.text = _formatFolio(currentCounter, DateTime.now());
+        _folioController.text = _formatFolio(nextNumber, DateTime.now());
       });
     }
   }
@@ -398,8 +422,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_quoteDraftKey);
 
-      final int currentCounter = prefs.getInt(_quoteFolioCounterKey) ?? 1;
-      final int nextCounter = currentCounter + 1;
+      final nextCounter = await _calculateNextQuoteNumber();
       await prefs.setInt(_quoteFolioCounterKey, nextCounter);
 
       final nextFolio = _formatFolio(nextCounter, DateTime.now());

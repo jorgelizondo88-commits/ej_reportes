@@ -81,6 +81,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _receivedByName = '';
   }
 
+  Future<int> _calculateNextReportNumber() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawHistory = prefs.getString('ej_reports_history_list');
+    int maxNumber = 0;
+    if (rawHistory != null && rawHistory.isNotEmpty) {
+      try {
+        final List<dynamic> list = jsonDecode(rawHistory);
+        for (final item in list) {
+          final folioStr = (item['folio'] ?? item['reportFolio'] ?? '').toString();
+          final match = RegExp(r'(\d+)$').firstMatch(folioStr);
+          if (match != null) {
+            final num = int.tryParse(match.group(1)!);
+            if (num != null && num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    final counterFromPrefs = prefs.getInt(_folioCounterKey) ?? 0;
+    final nextNumber = (maxNumber > counterFromPrefs ? maxNumber : counterFromPrefs) + 1;
+    return nextNumber;
+  }
+
   Future<void> _initAppData() async {
     final prefs = await SharedPreferences.getInstance();
     final rawDraft = prefs.getString(_draftKey);
@@ -88,9 +112,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (rawDraft != null && rawDraft.isNotEmpty) {
       await _restoreDraft();
     } else {
-      final int currentCounter = prefs.getInt(_folioCounterKey) ?? 1;
+      final nextNumber = await _calculateNextReportNumber();
       setState(() {
-        _resetToNewReportState(folio: _formatFolio(currentCounter, DateTime.now()));
+        _resetToNewReportState(folio: _formatFolio(nextNumber, DateTime.now()));
       });
     }
   }
@@ -207,8 +231,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
 
-      final int currentCounter = prefs.getInt(_folioCounterKey) ?? 1;
-      final int nextCounter = currentCounter + 1;
+      final nextCounter = await _calculateNextReportNumber();
       await prefs.setInt(_folioCounterKey, nextCounter);
 
       final nextFolio = _formatFolio(nextCounter, DateTime.now());

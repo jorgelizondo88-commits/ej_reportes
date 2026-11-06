@@ -85,6 +85,18 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
       await prefs.setString(_historyKey, jsonEncode(historyList));
 
+      // Actualizar contador del folio consecutivo para que el próximo sea siempre mayor
+      final match = RegExp(r'(\d+)$').firstMatch(widget.report.reportFolio);
+      if (match != null) {
+        final num = int.tryParse(match.group(1)!);
+        if (num != null) {
+          final current = prefs.getInt('ej_consecutive_folio_counter') ?? 0;
+          if (num >= current) {
+            await prefs.setInt('ej_consecutive_folio_counter', num);
+          }
+        }
+      }
+
       // Sincronización automática en segundo plano con Google Drive (Offline-First)
       GoogleDriveSyncService().enqueueAndSync(
         clientName: widget.report.clientName.isNotEmpty ? widget.report.clientName : widget.report.businessName,

@@ -146,6 +146,30 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
     }
   }
 
+  Future<int> _calculateNextScheduleNumber() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawHistory = prefs.getString('ej_schedules_history_list');
+    int maxNumber = 0;
+    if (rawHistory != null && rawHistory.isNotEmpty) {
+      try {
+        final List<dynamic> list = jsonDecode(rawHistory);
+        for (final item in list) {
+          final folioStr = (item['folio'] ?? item['scheduleFolio'] ?? '').toString();
+          final match = RegExp(r'(\d+)$').firstMatch(folioStr);
+          if (match != null) {
+            final num = int.tryParse(match.group(1)!);
+            if (num != null && num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    final counterFromPrefs = prefs.getInt(_scheduleFolioCounterKey) ?? 0;
+    final nextNumber = (maxNumber > counterFromPrefs ? maxNumber : counterFromPrefs) + 1;
+    return nextNumber;
+  }
+
   Future<void> _initDraftOrNew() async {
     final prefs = await SharedPreferences.getInstance();
     final rawDraft = prefs.getString(_scheduleDraftKey);
@@ -153,9 +177,9 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
     if (rawDraft != null && rawDraft.isNotEmpty) {
       _restoreDraft(rawDraft);
     } else {
-      final int currentCounter = prefs.getInt(_scheduleFolioCounterKey) ?? 1;
+      final nextNumber = await _calculateNextScheduleNumber();
       setState(() {
-        _folioController.text = _formatFolio(currentCounter, DateTime.now());
+        _folioController.text = _formatFolio(nextNumber, DateTime.now());
       });
       _generateVisits();
     }
@@ -535,8 +559,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_scheduleDraftKey);
 
-      final int currentCounter = prefs.getInt(_scheduleFolioCounterKey) ?? 1;
-      final int nextCounter = currentCounter + 1;
+      final nextCounter = await _calculateNextScheduleNumber();
       await prefs.setInt(_scheduleFolioCounterKey, nextCounter);
 
       setState(() {

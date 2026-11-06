@@ -78,10 +78,28 @@ class TrapLayoutService {
   Future<String> generateNextFolio() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_layoutsKey);
+      int maxNumber = 0;
+      if (raw != null && raw.isNotEmpty) {
+        try {
+          final List<dynamic> list = jsonDecode(raw);
+          for (final item in list) {
+            final folioStr = (item['folio'] ?? '').toString();
+            final match = RegExp(r'(\d+)$').firstMatch(folioStr);
+            if (match != null) {
+              final num = int.tryParse(match.group(1)!);
+              if (num != null && num > maxNumber) {
+                maxNumber = num;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       int currentCounter = prefs.getInt(_folioCounterKey) ?? 0;
-      currentCounter++;
-      await prefs.setInt(_folioCounterKey, currentCounter);
-      return '#EJ-LAY-${currentCounter.toString().padLeft(3, '0')}';
+      final nextCounter = (maxNumber > currentCounter ? maxNumber : currentCounter) + 1;
+      await prefs.setInt(_folioCounterKey, nextCounter);
+      return '#EJ-LAY-${nextCounter.toString().padLeft(3, '0')}';
     } catch (_) {
       final ts = DateTime.now().millisecondsSinceEpoch.toString();
       return '#EJ-LAY-${ts.substring(ts.length - 4)}';
