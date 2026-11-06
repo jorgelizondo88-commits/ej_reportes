@@ -1,0 +1,42 @@
+name: Compilar EJ Reportes para Windows
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Descargar código fuente
+        uses: actions/checkout@v4
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Habilitar Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Compilar aplicación Windows (Release)
+        run: flutter build windows --release
+
+      - name: Empaquetar ejecutable y recursos en ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "EJ_Reportes_Windows.zip"
+
+      - name: Publicar archivo descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: EJ_Reportes_Windows
+          path: EJ_Reportes_Windows.zip
+          retention-days: 60
