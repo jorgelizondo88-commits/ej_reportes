@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     name: Build Windows Release
@@ -40,3 +43,13 @@ jobs:
           name: EJ_Reportes_Windows
           path: EJ_Reportes_Windows.zip
           retention-days: 60
+
+      - name: Actualizar Release oficial de GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-windows
+          name: "EJ Reportes para Windows v1.0.0"
+          files: EJ_Reportes_Windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

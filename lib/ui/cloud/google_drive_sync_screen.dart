@@ -439,12 +439,12 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    isSignedIn ? (user?.displayName ?? 'Conectado a Google') : 'Google Drive Desconectado',
+                                    isSignedIn ? (_driveService.userDisplayName ?? user?.displayName ?? 'Conectado a Google') : 'Google Drive Desconectado',
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2B48)),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    isSignedIn ? (user?.email ?? '') : 'Conecta tu cuenta para respaldar tus documentos y generar enlaces para clientes.',
+                                    isSignedIn ? (_driveService.userEmail ?? user?.email ?? '') : 'Conecta tu cuenta para respaldar tus documentos y generar enlaces para clientes.',
                                     style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                                   ),
                                 ],

@@ -6,6 +6,7 @@ import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/client_model.dart';
 import '../models/cloud_sync_item_model.dart';
@@ -59,17 +60,39 @@ class GoogleDriveSyncService {
   static const String _folderCacheKey = 'ej_drive_folder_cache';
   static const String _lastBackupDateKey = 'ej_last_cloud_backup_date';
 
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: (Platform.isIOS || Platform.isMacOS) ? '803570972313-hm9441otq7pmpu0qv42lp0rlrpq335bj.apps.googleusercontent.com' : null,
-    scopes: [
-      'email',
-      'https://www.googleapis.com/auth/drive',
-    ],
-  );
+  // Credenciales OAuth para Windows Desktop
+  static const String _windowsClientId = '803570972313-aq3d1glj7nboprsdid92n038e1o4of7n.apps.googleusercontent.com';
+  static const String _windowsClientSecret = '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';
+  static const String _windowsAccessTokenKey = 'ej_windows_access_token';
+  static const String _windowsRefreshTokenKey = 'ej_windows_refresh_token';
+  static const String _windowsTokenExpiryKey = 'ej_windows_token_expiry';
+  static const String _windowsUserEmailKey = 'ej_windows_user_email';
+  static const String _windowsUserNameKey = 'ej_windows_user_name';
+
+  String? _windowsAccessToken;
+  String? _windowsRefreshToken;
+  DateTime? _windowsTokenExpiry;
+  String? _windowsUserEmail;
+  String? _windowsUserName;
+
+  GoogleSignIn? _googleSignInInstance;
+  GoogleSignIn get _googleSignIn {
+    return _googleSignInInstance ??= GoogleSignIn(
+      clientId: (Platform.isIOS || Platform.isMacOS) ? '803570972313-hm9441otq7pmpu0qv42lp0rlrpq335bj.apps.googleusercontent.com' : null,
+      scopes: [
+        'email',
+        'https://www.googleapis.com/auth/drive',
+      ],
+    );
+  }
 
   GoogleSignInAccount? _currentUser;
   GoogleSignInAccount? get currentUser => _currentUser;
-  bool get isSignedIn => _currentUser != null;
+  bool get isSignedIn => Platform.isWindows
+      ? (_windowsAccessToken != null && _windowsAccessToken!.isNotEmpty)
+      : (_currentUser != null);
+  String? get userEmail => Platform.isWindows ? _windowsUserEmail : _currentUser?.email;
+  String? get userDisplayName => Platform.isWindows ? _windowsUserName : _currentUser?.displayName;
   String? lastError;
 
   final Map<String, String> _folderIdCache = {};
@@ -79,6 +102,9 @@ class GoogleDriveSyncService {
   Future<bool> initSilently() async {
     try {
       await _loadFolderCache();
+      if (Platform.isWindows) {
+        return await _initWindowsSilently();
+      }
       final account = await _googleSignIn.signInSilently();
       _currentUser = account;
       return account != null;
@@ -88,9 +114,85 @@ class GoogleDriveSyncService {
     }
   }
 
+  Future<bool> _initWindowsSilently() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _windowsRefreshToken = prefs.getString(_windowsRefreshTokenKey);
+      _windowsAccessToken = prefs.getString(_windowsAccessTokenKey);
+      _windowsUserEmail = prefs.getString(_windowsUserEmailKey);
+      _windowsUserName = prefs.getString(_windowsUserNameKey);
+      final exp = prefs.getString(_windowsTokenExpiryKey);
+      if (exp != null) _windowsTokenExpiry = DateTime.tryParse(exp);
+
+      if (_windowsRefreshToken == null || _windowsRefreshToken!.isEmpty) {
+        return false;
+      }
+
+      if (_windowsAccessToken == null || _windowsTokenExpiry == null || DateTime.now().isAfter(_windowsTokenExpiry!.subtract(const Duration(minutes: 5)))) {
+        return await _refreshWindowsToken();
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Error en _initWindowsSilently: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _refreshWindowsToken() async {
+    if (_windowsRefreshToken == null || _windowsRefreshToken!.isEmpty) return false;
+    try {
+      final response = await http.post(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'client_id': _windowsClientId,
+          'client_secret': _windowsClientSecret,
+          'refresh_token': _windowsRefreshToken!,
+          'grant_type': 'refresh_token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _windowsAccessToken = data['access_token'];
+        final exp = data['expires_in'] as int? ?? 3600;
+        _windowsTokenExpiry = DateTime.now().add(Duration(seconds: exp));
+
+        final prefs = await SharedPreferences.getInstance();
+        if (_windowsAccessToken != null) await prefs.setString(_windowsAccessTokenKey, _windowsAccessToken!);
+        if (_windowsTokenExpiry != null) await prefs.setString(_windowsTokenExpiryKey, _windowsTokenExpiry!.toIso8601String());
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Error refrescando token en Windows: $e');
+      return false;
+    }
+  }
+
   // Iniciar sesión con Google (Interactivo)
   Future<GoogleSignInAccount?> signIn() async {
     lastError = null;
+    if (Platform.isWindows) {
+      final ok = await _signInWindows();
+      if (ok) {
+        processQueue();
+        final prefs = await SharedPreferences.getInstance();
+        final rawClients = prefs.getString('ej_saved_clients_list');
+        final rawReports = prefs.getString('ej_reports_history_list');
+        final bool hasLocalData = (rawClients != null && rawClients.isNotEmpty && rawClients != '[]') ||
+            (rawReports != null && rawReports.isNotEmpty && rawReports != '[]');
+        if (!hasLocalData) {
+          debugPrint('Dispositivo sin datos locales. Auto-restaurando desde Google Drive...');
+          await restoreDatabaseFromCloud();
+        } else {
+          backupDatabaseToCloud();
+        }
+      }
+      return null;
+    }
+
     try {
       final account = await _googleSignIn.signIn();
       _currentUser = account;
@@ -118,11 +220,130 @@ class GoogleDriveSyncService {
     }
   }
 
+  Future<bool> _signInWindows() async {
+    HttpServer? server;
+    try {
+      try {
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 8585);
+      } catch (_) {
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      }
+      final port = server.port;
+      final redirectUri = 'http://127.0.0.1:$port';
+
+      final authUri = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
+        'client_id': _windowsClientId,
+        'redirect_uri': redirectUri,
+        'response_type': 'code',
+        'scope': 'email profile https://www.googleapis.com/auth/drive',
+        'access_type': 'offline',
+        'prompt': 'consent',
+      });
+
+      await launchUrl(authUri, mode: LaunchMode.externalApplication);
+
+      String? authCode;
+      await for (final request in server.timeout(const Duration(minutes: 3))) {
+        if (request.uri.path == '/' || request.uri.queryParameters.containsKey('code')) {
+          authCode = request.uri.queryParameters['code'];
+          request.response.headers.contentType = ContentType.html;
+          request.response.write('''
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"><title>EJ Exterminadores - Conectado</title></head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center; padding: 60px 20px; background-color: #f8fafc;">
+              <div style="max-width: 480px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0;">
+                <h2 style="color: #0F2B48; margin-top: 0;">¡Google Drive Conectado con Éxito!</h2>
+                <p style="color: #475569; font-size: 15px; line-height: 1.5;">Tu cuenta ha sido vinculada a <strong>EJ Exterminadores</strong>. Ya puedes cerrar esta ventana y regresar a la aplicación de escritorio.</p>
+              </div>
+            </body>
+            </html>
+          ''');
+          await request.response.close();
+          break;
+        } else {
+          request.response.statusCode = 404;
+          await request.response.close();
+        }
+      }
+      await server.close();
+
+      if (authCode == null || authCode.isEmpty) {
+        lastError = 'No se recibió el código de autorización.';
+        return false;
+      }
+
+      final tokenResponse = await http.post(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: {
+          'client_id': _windowsClientId,
+          'client_secret': _windowsClientSecret,
+          'code': authCode,
+          'redirect_uri': redirectUri,
+          'grant_type': 'authorization_code',
+        },
+      );
+
+      if (tokenResponse.statusCode != 200) {
+        lastError = 'Error canjeando token: ${tokenResponse.body}';
+        debugPrint('Error token: ${tokenResponse.body}');
+        return false;
+      }
+
+      final tokenData = jsonDecode(tokenResponse.body);
+      _windowsAccessToken = tokenData['access_token'];
+      _windowsRefreshToken = tokenData['refresh_token'] ?? _windowsRefreshToken;
+      final exp = tokenData['expires_in'] as int? ?? 3600;
+      _windowsTokenExpiry = DateTime.now().add(Duration(seconds: exp));
+
+      try {
+        final userResponse = await http.get(
+          Uri.parse('https://www.googleapis.com/oauth2/v3/userinfo'),
+          headers: {'Authorization': 'Bearer $_windowsAccessToken'},
+        );
+        if (userResponse.statusCode == 200) {
+          final userData = jsonDecode(userResponse.body);
+          _windowsUserEmail = userData['email'];
+          _windowsUserName = userData['name'];
+        }
+      } catch (_) {}
+
+      final prefs = await SharedPreferences.getInstance();
+      if (_windowsAccessToken != null) await prefs.setString(_windowsAccessTokenKey, _windowsAccessToken!);
+      if (_windowsRefreshToken != null) await prefs.setString(_windowsRefreshTokenKey, _windowsRefreshToken!);
+      if (_windowsTokenExpiry != null) await prefs.setString(_windowsTokenExpiryKey, _windowsTokenExpiry!.toIso8601String());
+      if (_windowsUserEmail != null) await prefs.setString(_windowsUserEmailKey, _windowsUserEmail!);
+      if (_windowsUserName != null) await prefs.setString(_windowsUserNameKey, _windowsUserName!);
+
+      return true;
+    } catch (e) {
+      server?.close();
+      lastError = 'Error al conectar con Google en Windows: $e';
+      debugPrint('Error en _signInWindows: $e');
+      return false;
+    }
+  }
+
   // Cerrar sesión
   Future<void> signOut() async {
     try {
-      await _googleSignIn.signOut();
-      _currentUser = null;
+      if (Platform.isWindows) {
+        _windowsAccessToken = null;
+        _windowsRefreshToken = null;
+        _windowsTokenExpiry = null;
+        _windowsUserEmail = null;
+        _windowsUserName = null;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_windowsAccessTokenKey);
+        await prefs.remove(_windowsRefreshTokenKey);
+        await prefs.remove(_windowsTokenExpiryKey);
+        await prefs.remove(_windowsUserEmailKey);
+        await prefs.remove(_windowsUserNameKey);
+      } else {
+        await _googleSignIn.signOut();
+        _currentUser = null;
+      }
       _folderIdCache.clear();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_folderCacheKey);
@@ -133,6 +354,11 @@ class GoogleDriveSyncService {
 
   // Re-solicitar inicio de sesión interactivo con permisos completos de Drive
   Future<GoogleSignInAccount?> requestFullDriveAccess() async {
+    if (Platform.isWindows) {
+      await signOut();
+      await signIn();
+      return null;
+    }
     lastError = null;
     try {
       await _googleSignIn.signOut();
@@ -160,6 +386,17 @@ class GoogleDriveSyncService {
 
   // Obtener cliente autenticado de Google Drive
   Future<drive.DriveApi?> _getDriveApi() async {
+    if (Platform.isWindows) {
+      if (_windowsAccessToken == null || _windowsTokenExpiry == null || DateTime.now().isAfter(_windowsTokenExpiry!.subtract(const Duration(minutes: 5)))) {
+        await _initWindowsSilently();
+      }
+      if (_windowsAccessToken == null || _windowsAccessToken!.isEmpty) {
+        return null;
+      }
+      final authClient = _GoogleAuthClient({'Authorization': 'Bearer $_windowsAccessToken'});
+      return drive.DriveApi(authClient);
+    }
+
     if (_currentUser == null) {
       await initSilently();
       if (_currentUser == null) return null;
@@ -683,7 +920,7 @@ class GoogleDriveSyncService {
         'version': 1,
         'appName': 'EJ Reportes',
         'backupDate': DateTime.now().toIso8601String(),
-        'accountEmail': _currentUser?.email ?? '',
+        'accountEmail': userEmail ?? '',
         'data': snapshot,
       });
 
