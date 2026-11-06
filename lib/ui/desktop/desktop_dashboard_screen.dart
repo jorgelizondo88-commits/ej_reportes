@@ -53,6 +53,8 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   final GoogleDriveSyncService _driveService = GoogleDriveSyncService();
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchFilter = '';
+  String? _selectedReportClientFilter;
+  String? _selectedQuoteClientFilter;
 
   @override
   void initState() {
@@ -497,11 +499,27 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
   // --- VISTA DIVIDIDA: REPORTES DE SERVICIO ---
   Widget _buildSplitReportsView() {
+    final clientNames = <String>{};
+    for (final r in _reports) {
+      final name = (r['businessName'] != null && r['businessName'].toString().trim().isNotEmpty)
+          ? r['businessName'].toString().trim()
+          : (r['clientName'] ?? '').toString().trim();
+      if (name.isNotEmpty) clientNames.add(name);
+    }
+    final sortedClients = clientNames.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     final filtered = _reports.where((r) {
-      if (_searchFilter.isEmpty) return true;
-      final client = (r['businessName'] ?? r['clientName'] ?? '').toString().toLowerCase();
+      final client = (r['businessName'] ?? r['clientName'] ?? '').toString();
       final folio = (r['folio'] ?? '').toString().toLowerCase();
-      return client.contains(_searchFilter) || folio.contains(_searchFilter);
+
+      if (_selectedReportClientFilter != null && _selectedReportClientFilter!.isNotEmpty) {
+        if (client.trim().toLowerCase() != _selectedReportClientFilter!.trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      if (_searchFilter.isEmpty) return true;
+      return client.toLowerCase().contains(_searchFilter) || folio.contains(_searchFilter);
     }).toList();
 
     return Padding(
@@ -511,7 +529,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         children: [
           // Lado Izquierdo: Lista de Reportes
           Container(
-            width: 380,
+            width: 400,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -520,6 +538,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Encabezado
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: const BoxDecoration(
@@ -534,6 +553,56 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                     ],
                   ),
                 ),
+
+                // Filtro por Cliente
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF1F5F9),
+                    border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people_alt_outlined, size: 16, color: Color(0xFF0F2B48)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: _selectedReportClientFilter,
+                            isDense: true,
+                            isExpanded: true,
+                            hint: const Text('Filtrar por cliente...', style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('Todos los clientes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                              ),
+                              ...sortedClients.map((c) => DropdownMenuItem<String?>(
+                                value: c,
+                                child: Text(c, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                              )),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedReportClientFilter = val;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      if (_selectedReportClientFilter != null)
+                        IconButton(
+                          icon: const Icon(Icons.cancel, size: 16, color: Colors.grey),
+                          tooltip: 'Mostrar todos',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => setState(() => _selectedReportClientFilter = null),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Lista de Reportes
                 Expanded(
                   child: filtered.isEmpty
                       ? const Center(child: Text('No hay reportes registrados.', style: TextStyle(fontSize: 12, color: Colors.black45)))
@@ -544,15 +613,45 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                             final item = filtered[i];
                             final isSel = _selectedReport != null && _selectedReport!['folio'] == item['folio'];
                             final clientName = (item['businessName'] ?? item['clientName'] ?? 'Cliente').toString();
-                            final folio = (item['folio'] ?? '').toString();
-                            final date = (item['date'] ?? '').toString();
+                            final folio = (item['folio'] ?? 'S_N').toString();
+
+                            final rawDate = (item['serviceDate'] ?? item['date'] ?? item['createdAt'] ?? '').toString();
+                            String formattedDate = '';
+                            if (rawDate.isNotEmpty) {
+                              final parsed = DateTime.tryParse(rawDate);
+                              if (parsed != null) {
+                                formattedDate = DateFormat('dd/MM/yyyy').format(parsed);
+                              } else {
+                                formattedDate = rawDate.split('T').first;
+                              }
+                            }
 
                             return ListTile(
                               dense: true,
                               selected: isSel,
                               selectedTileColor: const Color(0xFFE0F2FE),
                               title: Text(clientName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              subtitle: Text('Folio: $folio • $date', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE2E8F0),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text('Folio: $folio', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                                    ),
+                                    if (formattedDate.isNotEmpty) ...[
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.calendar_today_outlined, size: 11, color: Color(0xFF64748B)),
+                                      const SizedBox(width: 3),
+                                      Text(formattedDate, style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+                                    ],
+                                  ],
+                                ),
+                              ),
                               trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.black38),
                               onTap: () => setState(() => _selectedReport = item),
                             );
@@ -590,11 +689,27 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
   // --- VISTA DIVIDIDA: COTIZACIONES ---
   Widget _buildSplitQuotesView() {
+    final clientNames = <String>{};
+    for (final q in _quotes) {
+      final name = (q['businessName'] != null && q['businessName'].toString().trim().isNotEmpty)
+          ? q['businessName'].toString().trim()
+          : (q['clientName'] ?? '').toString().trim();
+      if (name.isNotEmpty) clientNames.add(name);
+    }
+    final sortedClients = clientNames.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     final filtered = _quotes.where((q) {
-      if (_searchFilter.isEmpty) return true;
-      final client = (q['businessName'] ?? q['clientName'] ?? '').toString().toLowerCase();
+      final client = (q['businessName'] ?? q['clientName'] ?? '').toString();
       final folio = (q['folio'] ?? '').toString().toLowerCase();
-      return client.contains(_searchFilter) || folio.contains(_searchFilter);
+
+      if (_selectedQuoteClientFilter != null && _selectedQuoteClientFilter!.isNotEmpty) {
+        if (client.trim().toLowerCase() != _selectedQuoteClientFilter!.trim().toLowerCase()) {
+          return false;
+        }
+      }
+
+      if (_searchFilter.isEmpty) return true;
+      return client.toLowerCase().contains(_searchFilter) || folio.contains(_searchFilter);
     }).toList();
 
     return Padding(
@@ -603,7 +718,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 380,
+            width: 400,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(10),
@@ -612,6 +727,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Encabezado
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: const BoxDecoration(
@@ -626,6 +742,56 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                     ],
                   ),
                 ),
+
+                // Filtro por Cliente
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF1F5F9),
+                    border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people_alt_outlined, size: 16, color: Color(0xFF0F2B48)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: _selectedQuoteClientFilter,
+                            isDense: true,
+                            isExpanded: true,
+                            hint: const Text('Filtrar por cliente...', style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('Todos los clientes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                              ),
+                              ...sortedClients.map((c) => DropdownMenuItem<String?>(
+                                value: c,
+                                child: Text(c, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                              )),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedQuoteClientFilter = val;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      if (_selectedQuoteClientFilter != null)
+                        IconButton(
+                          icon: const Icon(Icons.cancel, size: 16, color: Colors.grey),
+                          tooltip: 'Mostrar todos',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => setState(() => _selectedQuoteClientFilter = null),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Lista de Cotizaciones
                 Expanded(
                   child: filtered.isEmpty
                       ? const Center(child: Text('No hay cotizaciones registradas.', style: TextStyle(fontSize: 12, color: Colors.black45)))
@@ -636,15 +802,50 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                             final item = filtered[i];
                             final isSel = _selectedQuote != null && _selectedQuote!['folio'] == item['folio'];
                             final clientName = (item['businessName'] ?? item['clientName'] ?? 'Cliente').toString();
-                            final folio = (item['folio'] ?? '').toString();
+                            final folio = (item['folio'] ?? 'S_N').toString();
                             final total = (item['total'] ?? item['amount'] ?? '').toString();
+
+                            final rawDate = (item['quoteDate'] ?? item['date'] ?? item['createdAt'] ?? '').toString();
+                            String formattedDate = '';
+                            if (rawDate.isNotEmpty) {
+                              final parsed = DateTime.tryParse(rawDate);
+                              if (parsed != null) {
+                                formattedDate = DateFormat('dd/MM/yyyy').format(parsed);
+                              } else {
+                                formattedDate = rawDate.split('T').first;
+                              }
+                            }
 
                             return ListTile(
                               dense: true,
                               selected: isSel,
                               selectedTileColor: const Color(0xFFE0F2FE),
                               title: Text(clientName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              subtitle: Text('Folio: $folio ${total.isNotEmpty ? "• $total" : ""}', style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B))),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFE2E8F0),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text('Folio: $folio', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                                    ),
+                                    if (formattedDate.isNotEmpty) ...[
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.calendar_today_outlined, size: 11, color: Color(0xFF64748B)),
+                                      const SizedBox(width: 3),
+                                      Text(formattedDate, style: const TextStyle(fontSize: 11, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+                                    ],
+                                    if (total.isNotEmpty) ...[
+                                      const Spacer(),
+                                      Text(total, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                                    ],
+                                  ],
+                                ),
+                              ),
                               trailing: const Icon(Icons.chevron_right, size: 16, color: Colors.black38),
                               onTap: () => setState(() => _selectedQuote = item),
                             );

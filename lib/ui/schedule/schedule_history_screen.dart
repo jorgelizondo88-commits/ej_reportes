@@ -888,185 +888,261 @@ Le confirmamos su servicio programado:
       return d.year == _selectedDay.year && d.month == _selectedDay.month && d.day == _selectedDay.day;
     }).toList();
 
-    return Column(
-      children: [
-        // 1. Selector de Mes con Botones Anterior / Siguiente
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          color: Colors.grey.shade100,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, color: Color(0xFF0F2B48)),
-                onPressed: () {
-                  setState(() {
-                    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
-                  });
-                },
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 800;
+
+    // Widget del calendario (Selector + Días de la semana + Grid)
+    Widget buildCalendarCard({double aspectRatio = 1.35}) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: isDesktop ? Border.all(color: const Color(0xFFE2E8F0)) : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 1. Selector de Mes
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: isDesktop ? const BorderRadius.vertical(top: Radius.circular(9)) : null,
               ),
-              Row(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    monthFormat.format(_focusedMonth).toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F2B48)),
-                  ),
-                  const SizedBox(width: 8),
-                  InkWell(
-                    onTap: () {
-                      final now = DateTime.now();
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left, color: Color(0xFF0F2B48), size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
                       setState(() {
-                        _focusedMonth = DateTime(now.year, now.month, 1);
-                        _selectedDay = DateTime(now.year, now.month, now.day);
+                        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1, 1);
                       });
                     },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0F2B48),
-                        borderRadius: BorderRadius.circular(12),
+                  ),
+                  Row(
+                    children: [
+                      Text(
+                        monthFormat.format(_focusedMonth).toUpperCase(),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF0F2B48)),
                       ),
-                      child: const Text('Hoy', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () {
+                          final now = DateTime.now();
+                          setState(() {
+                            _focusedMonth = DateTime(now.year, now.month, 1);
+                            _selectedDay = DateTime(now.year, now.month, now.day);
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F2B48),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text('Hoy', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right, color: Color(0xFF0F2B48), size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      setState(() {
+                        _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
+                      });
+                    },
                   ),
                 ],
               ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, color: Color(0xFF0F2B48)),
-                onPressed: () {
-                  setState(() {
-                    _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 1);
-                  });
-                },
+            ),
+
+            // 2. Encabezados de Días (Dom, Lun...)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: const [
+                  Text('Dom', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.redAccent)),
+                  Text('Lun', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
+                  Text('Mar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
+                  Text('Mié', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
+                  Text('Jue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
+                  Text('Vie', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
+                  Text('Sáb', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Colors.blueGrey)),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
 
-        // 2. Encabezados de Días de la Semana (Dom, Lun, Mar, Mié, Jue, Vie, Sáb)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              Text('Dom', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.redAccent)),
-              Text('Lun', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-              Text('Mar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-              Text('Mié', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-              Text('Jue', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-              Text('Vie', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-              Text('Sáb', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.blueGrey)),
-            ],
-          ),
-        ),
+            // 3. Grid de Días Compacto
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              child: _buildMonthDaysGrid(allVisits, childAspectRatio: aspectRatio),
+            ),
 
-        // 3. Cuadrícula de Días del Mes
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: _buildMonthDaysGrid(allVisits),
-        ),
-
-        const Divider(height: 16),
-
-        // 4. Encabezado del Día Seleccionado
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  dayOfWeekFormat.format(_selectedDay),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F2B48)),
-                ),
+            // Leyenda de puntos compacta
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _legendDot(Colors.orange, 'Prospecto'),
+                  const SizedBox(width: 12),
+                  _legendDot(const Color(0xFF0F2B48), 'Pendiente'),
+                  const SizedBox(width: 12),
+                  _legendDot(Colors.green, 'Realizada'),
+                ],
               ),
-              Text(
-                '${selectedDayVisits.length} ${selectedDayVisits.length == 1 ? 'visita' : 'visitas'}',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 8),
-              InkWell(
-                onTap: () async {
-                  final res = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => QuickAppointmentScreen(
-                        initialDate: _selectedDay,
-                      ),
-                    ),
-                  );
-                  if (res == true) _loadSchedules();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F2B48).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add, size: 14, color: Color(0xFF0F2B48)),
-                      Text(' Agendar aquí', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
-                    ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Widget del detalle de visitas para el día seleccionado
+    Widget buildDayVisitsPane() {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            color: isDesktop ? Colors.white : Colors.transparent,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    dayOfWeekFormat.format(_selectedDay),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F2B48)),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 6),
-
-        // 5. Lista de Visitas del Día Seleccionado con padding inferior para no chocar con el FAB
-        Expanded(
-          child: selectedDayVisits.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.event_available, size: 44, color: Colors.grey.shade400),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No hay visitas programadas para este día.',
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                Text(
+                  '${selectedDayVisits.length} ${selectedDayVisits.length == 1 ? 'visita' : 'visitas'}',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () async {
+                    final res = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => QuickAppointmentScreen(initialDate: _selectedDay),
                       ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFF0F2B48)),
-                        ),
-                        icon: const Icon(Icons.add, size: 16, color: Color(0xFF0F2B48)),
-                        label: const Text('Agendar servicio para hoy', style: TextStyle(color: Color(0xFF0F2B48))),
-                        onPressed: () async {
-                          final res = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => QuickAppointmentScreen(
-                                initialDate: _selectedDay,
-                              ),
-                            ),
-                          );
-                          if (res == true) _loadSchedules();
-                        },
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                  itemCount: selectedDayVisits.length,
-                  itemBuilder: (context, idx) {
-                    final item = selectedDayVisits[idx];
-                    return _buildVisitCard(item);
+                    );
+                    if (res == true) _loadSchedules();
                   },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F2B48).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add, size: 14, color: Color(0xFF0F2B48)),
+                        Text(' Agendar aquí', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                      ],
+                    ),
+                  ),
                 ),
+              ],
+            ),
+          ),
+          if (isDesktop) const Divider(height: 1, color: Color(0xFFE2E8F0)),
+          const SizedBox(height: 6),
+          Expanded(
+            child: selectedDayVisits.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.event_available, size: 44, color: Colors.grey.shade400),
+                        const SizedBox(height: 8),
+                        Text('No hay visitas programadas para este día.', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(side: const BorderSide(color: Color(0xFF0F2B48))),
+                          icon: const Icon(Icons.add, size: 16, color: Color(0xFF0F2B48)),
+                          label: const Text('Agendar servicio para hoy', style: TextStyle(color: Color(0xFF0F2B48))),
+                          onPressed: () async {
+                            final res = await Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => QuickAppointmentScreen(initialDate: _selectedDay)),
+                            );
+                            if (res == true) _loadSchedules();
+                          },
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
+                    itemCount: selectedDayVisits.length,
+                    itemBuilder: (context, idx) {
+                      final item = selectedDayVisits[idx];
+                      return _buildVisitCard(item);
+                    },
+                  ),
+          ),
+        ],
+      );
+    }
+
+    if (isDesktop) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 380,
+              child: buildCalendarCard(aspectRatio: 1.35),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: buildDayVisitsPane(),
+              ),
+            ),
+          ],
         ),
+      );
+    }
+
+    // Modo móvil / estrecho
+    return Column(
+      children: [
+        buildCalendarCard(aspectRatio: 1.6),
+        const Divider(height: 8),
+        Expanded(child: buildDayVisitsPane()),
+      ],
+    );
+  }
+
+  Widget _legendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
       ],
     );
   }
 
   /// Construye la matriz de días del mes con sus indicadores
-  Widget _buildMonthDaysGrid(List<Map<String, dynamic>> allVisits) {
+  Widget _buildMonthDaysGrid(List<Map<String, dynamic>> allVisits, {double childAspectRatio = 1.35}) {
     final firstDayOfMonth = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
     final daysInMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0).day;
 
@@ -1079,11 +1155,11 @@ Le confirmamos su servicio programado:
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: totalCells,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 7,
         mainAxisSpacing: 3,
         crossAxisSpacing: 3,
-        childAspectRatio: 1.25,
+        childAspectRatio: childAspectRatio,
       ),
       itemBuilder: (context, index) {
         final dayNum = index - startOffset + 1;
@@ -1130,7 +1206,7 @@ Le confirmamos su servicio programado:
                 Text(
                   '$dayNum',
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 12,
                     fontWeight: isSelected || isToday ? FontWeight.bold : FontWeight.w500,
                     color: isSelected ? Colors.white : (index % 7 == 0 ? Colors.redAccent : Colors.black87),
                   ),
@@ -1142,8 +1218,8 @@ Le confirmamos su servicio programado:
                     children: [
                       if (hasProspect)
                         Container(
-                          width: 5,
-                          height: 5,
+                          width: 4.5,
+                          height: 4.5,
                           margin: const EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
                             color: isSelected ? Colors.amberAccent : Colors.orange,
@@ -1152,8 +1228,8 @@ Le confirmamos su servicio programado:
                         ),
                       if (hasPending)
                         Container(
-                          width: 5,
-                          height: 5,
+                          width: 4.5,
+                          height: 4.5,
                           margin: const EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
                             color: isSelected ? Colors.lightBlueAccent : const Color(0xFF0F2B48),
@@ -1162,8 +1238,8 @@ Le confirmamos su servicio programado:
                         ),
                       if (hasCompleted)
                         Container(
-                          width: 5,
-                          height: 5,
+                          width: 4.5,
+                          height: 4.5,
                           margin: const EdgeInsets.symmetric(horizontal: 1),
                           decoration: BoxDecoration(
                             color: isSelected ? Colors.lightGreenAccent : Colors.green,
