@@ -250,6 +250,34 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     }
   }
 
+  Future<void> _syncFromDrive() async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 12),
+            Text('Sincronizando reportes con Google Drive...'),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+    await GoogleDriveSyncService().pullAndMergeCloudDatabase();
+    await GoogleDriveSyncService().discoverDriveDocuments();
+    await _loadHistory();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Historial sincronizado con éxito!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy');
@@ -268,6 +296,13 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
         title: const Text('Historial de Reportes', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sincronizar con Google Drive',
+            onPressed: _syncFromDrive,
+          ),
+        ],
       ),
       body: Column(
         children: [

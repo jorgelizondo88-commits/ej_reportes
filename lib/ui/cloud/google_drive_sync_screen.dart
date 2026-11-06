@@ -118,6 +118,7 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
         _isSyncingAll = false;
         _queue = queue;
       });
+      widget.onDataRestored?.call();
 
       showDialog(
         context: context,

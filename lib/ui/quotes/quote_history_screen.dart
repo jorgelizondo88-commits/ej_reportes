@@ -249,6 +249,34 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
     }
   }
 
+  Future<void> _syncFromDrive() async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+            SizedBox(width: 12),
+            Text('Sincronizando cotizaciones con Google Drive...'),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+      ),
+    );
+    await GoogleDriveSyncService().pullAndMergeCloudDatabase();
+    await GoogleDriveSyncService().discoverDriveDocuments();
+    await _loadHistory();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Historial sincronizado con éxito!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy');
@@ -267,6 +295,13 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
         title: const Text('Historial de Cotizaciones', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sincronizar con Google Drive',
+            onPressed: _syncFromDrive,
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -336,23 +371,37 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF0F2B48)))
-                : _filteredQuotes.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.request_quote_outlined, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 12),
-                  Text(
-                    _searchController.text.isNotEmpty
-                        ? 'No se encontraron cotizaciones para esa búsqueda.'
-                        : 'Aún no tienes cotizaciones guardadas.',
-                    style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
-                  ),
-                ],
-              ),
-            )
-                : ListView.builder(
+                : RefreshIndicator(
+                    onRefresh: _syncFromDrive,
+                    child: _filteredQuotes.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.request_quote_outlined, size: 64, color: Colors.grey.shade400),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _searchController.text.isNotEmpty
+                                          ? 'No se encontraron cotizaciones para esa búsqueda.'
+                                          : 'Aún no tienes cotizaciones guardadas.',
+                                      style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Desliza hacia abajo o pulsa el icono de sincronizar arriba',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(12),
               itemCount: _filteredQuotes.length,
               itemBuilder: (context, index) {
@@ -458,6 +507,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
               },
             ),
           ),
+        ),
         ],
       ),
     );

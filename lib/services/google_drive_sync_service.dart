@@ -1111,6 +1111,410 @@ class GoogleDriveSyncService {
     }
   }
 
+  // --- MÉTODOS DE FUSIÓN Y SINCRONIZACIÓN BIDIRECCIONAL ---
+
+  /// Descarga el respaldo maestro desde Google Drive y fusiona bidireccionalmente
+  /// clientes, reportes, cotizaciones, contratos y cronogramas sin borrar datos locales.
+  Future<bool> pullAndMergeCloudDatabase({Function(String status, double progress)? onProgress}) async {
+    final api = await _getDriveApi();
+    if (api == null) return false;
+
+    try {
+      final rootId = await _getRootFolderId(api);
+      if (rootId == null) return false;
+
+      final backupFolderId = await _getOrCreateFolder(api, 'Respaldo_Sistema_App', parentId: rootId);
+
+      onProgress?.call('Buscando respaldo maestro en Google Drive...', 0.02);
+
+      String q = "name = 'ej_reportes_base_datos.json' and '$backupFolderId' in parents and trashed = false";
+      var search = await api.files.list(q: q, $fields: 'files(id, name, modifiedTime)');
+
+      if (search.files == null || search.files!.isEmpty) {
+        search = await api.files.list(
+          q: "name = 'ej_reportes_base_datos.json' and trashed = false",
+          $fields: 'files(id, name, modifiedTime)',
+        );
+      }
+
+      if (search.files == null || search.files!.isEmpty) return false;
+
+      final fileId = search.files!.first.id!;
+
+      Future<Map<String, dynamic>?> downloadAndParse(drive.Media mediaStream) async {
+        try {
+          final List<int> bytes = [];
+          await for (final chunk in mediaStream.stream) {
+            bytes.addAll(chunk);
+          }
+          final content = utf8.decode(bytes);
+          final Map<String, dynamic> parsed = jsonDecode(content);
+          return parsed['data'] != null ? Map<String, dynamic>.from(parsed['data']) : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      final drive.Media mainDownloaded = await api.files.get(
+        fileId,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+
+      Map<String, dynamic>? cloudData = await downloadAndParse(mainDownloaded);
+
+      int countItems(dynamic raw) {
+        if (raw == null) return 0;
+        if (raw is List) return raw.length;
+        if (raw is String && raw.isNotEmpty && raw != '[]') {
+          try {
+            final decoded = jsonDecode(raw);
+            if (decoded is List) return decoded.length;
+          } catch (_) {}
+        }
+        return 0;
+      }
+
+      int cloudClients = countItems(cloudData?['ej_saved_clients_list']);
+      int cloudReports = countItems(cloudData?['ej_reports_history_list']);
+      int cloudQuotes = countItems(cloudData?['ej_quotes_history_list']);
+
+      if (cloudClients == 0 && cloudReports == 0 && cloudQuotes == 0) {
+        try {
+          final revs = await api.revisions.list(fileId);
+          if (revs.revisions != null && revs.revisions!.isNotEmpty) {
+            for (final rev in revs.revisions!.reversed) {
+              if (rev.id == null) continue;
+              try {
+                final drive.Media revMedia = await api.revisions.get(
+                  fileId,
+                  rev.id!,
+                  downloadOptions: drive.DownloadOptions.fullMedia,
+                ) as drive.Media;
+                final revData = await downloadAndParse(revMedia);
+                if (countItems(revData?['ej_saved_clients_list']) > 0 ||
+                    countItems(revData?['ej_reports_history_list']) > 0 ||
+                    countItems(revData?['ej_quotes_history_list']) > 0) {
+                  cloudData = revData;
+                  break;
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (cloudData == null) return false;
+
+      final prefs = await SharedPreferences.getInstance();
+
+      // 1. Fusionar Cotizaciones
+      _mergeJsonLists(
+        prefs: prefs,
+        key: 'ej_quotes_history_list',
+        cloudRaw: cloudData['ej_quotes_history_list'],
+        uniqueKey: 'folio',
+      );
+
+      // 2. Fusionar Reportes
+      _mergeJsonLists(
+        prefs: prefs,
+        key: 'ej_reports_history_list',
+        cloudRaw: cloudData['ej_reports_history_list'],
+        uniqueKey: 'folio',
+      );
+
+      // 3. Fusionar Contratos
+      _mergeJsonLists(
+        prefs: prefs,
+        key: 'ej_contracts_history_list',
+        cloudRaw: cloudData['ej_contracts_history_list'],
+        uniqueKey: 'folio',
+      );
+
+      // 4. Fusionar Clientes
+      _mergeClientsList(
+        prefs: prefs,
+        cloudRaw: cloudData['ej_saved_clients_list'],
+      );
+
+      // 5. Fusionar Cronogramas
+      _mergeJsonLists(
+        prefs: prefs,
+        key: 'ej_schedules_history_list',
+        cloudRaw: cloudData['ej_schedules_history_list'],
+        uniqueKey: 'folio',
+      );
+
+      // 6. Fusionar contadores de folios para que el siguiente número sea siempre el más alto
+      for (final counterKey in [
+        'ej_consecutive_quote_counter',
+        'ej_consecutive_folio_counter',
+        'ej_consecutive_schedule_counter',
+        'ej_contracts_folio_counter',
+        'ej_layout_folio_counter',
+      ]) {
+        final localVal = prefs.getInt(counterKey) ?? 0;
+        final cloudVal = (cloudData[counterKey] is int) ? (cloudData[counterKey] as int) : 0;
+        if (cloudVal > localVal) {
+          await prefs.setInt(counterKey, cloudVal);
+        }
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('Error en pullAndMergeCloudDatabase: $e');
+      return false;
+    }
+  }
+
+  void _mergeJsonLists({
+    required SharedPreferences prefs,
+    required String key,
+    required dynamic cloudRaw,
+    required String uniqueKey,
+  }) {
+    try {
+      final localRaw = prefs.getString(key);
+      List<dynamic> localList = localRaw != null && localRaw.isNotEmpty ? jsonDecode(localRaw) : [];
+      List<dynamic> cloudList = [];
+      if (cloudRaw is String && cloudRaw.isNotEmpty) {
+        cloudList = jsonDecode(cloudRaw);
+      } else if (cloudRaw is List) {
+        cloudList = cloudRaw;
+      }
+
+      final Map<String, Map<String, dynamic>> map = {};
+
+      for (final item in cloudList) {
+        if (item is Map) {
+          final u = (item[uniqueKey] ?? '').toString().trim();
+          if (u.isNotEmpty) map[u] = Map<String, dynamic>.from(item);
+        }
+      }
+
+      for (final item in localList) {
+        if (item is Map) {
+          final u = (item[uniqueKey] ?? '').toString().trim();
+          if (u.isNotEmpty) {
+            if (!map.containsKey(u)) {
+              map[u] = Map<String, dynamic>.from(item);
+            } else {
+              final localPath = item['filePath'] as String?;
+              if (localPath != null && localPath.isNotEmpty && File(localPath).existsSync()) {
+                map[u]!['filePath'] = localPath;
+              }
+            }
+          }
+        }
+      }
+
+      final merged = map.values.toList()
+        ..sort((a, b) => (b['savedAt'] ?? b['serviceDate'] ?? b['quoteDate'] ?? '')
+            .toString()
+            .compareTo((a['savedAt'] ?? a['serviceDate'] ?? a['quoteDate'] ?? '').toString()));
+
+      prefs.setString(key, jsonEncode(merged));
+    } catch (e) {
+      debugPrint('Error fusionando lista $key: $e');
+    }
+  }
+
+  void _mergeClientsList({
+    required SharedPreferences prefs,
+    required dynamic cloudRaw,
+  }) {
+    try {
+      final localRaw = prefs.getString('ej_saved_clients_list');
+      List<dynamic> localList = localRaw != null && localRaw.isNotEmpty ? jsonDecode(localRaw) : [];
+      List<dynamic> cloudList = [];
+      if (cloudRaw is String && cloudRaw.isNotEmpty) {
+        cloudList = jsonDecode(cloudRaw);
+      } else if (cloudRaw is List) {
+        cloudList = cloudRaw;
+      }
+
+      final Map<String, Map<String, dynamic>> map = {};
+
+      for (final c in cloudList) {
+        if (c is Map) {
+          final name = (c['businessName'] ?? c['contactName'] ?? '').toString().trim().toLowerCase();
+          final phone = (c['phone'] ?? '').toString().trim();
+          final key = '$name-$phone';
+          if (key.isNotEmpty && key != '-') map[key] = Map<String, dynamic>.from(c);
+        }
+      }
+
+      for (final c in localList) {
+        if (c is Map) {
+          final name = (c['businessName'] ?? c['contactName'] ?? '').toString().trim().toLowerCase();
+          final phone = (c['phone'] ?? '').toString().trim();
+          final key = '$name-$phone';
+          if (key.isNotEmpty && key != '-') {
+            if (!map.containsKey(key)) {
+              map[key] = Map<String, dynamic>.from(c);
+            }
+          }
+        }
+      }
+
+      final merged = map.values.toList();
+      prefs.setString('ej_saved_clients_list', jsonEncode(merged));
+    } catch (e) {
+      debugPrint('Error fusionando clientes: $e');
+    }
+  }
+
+  /// Escanea Google Drive en busca de archivos PDF de cotizaciones o reportes
+  /// que existan en la nube pero no estén en el historial local, e impórtalos automáticamente.
+  Future<int> discoverDriveDocuments({Function(String status, double progress)? onProgress}) async {
+    final api = await _getDriveApi();
+    if (api == null) return 0;
+
+    int discoveredCount = 0;
+    try {
+      final clientsRootId = await _getClientsRootFolderId(api);
+      if (clientsRootId == null) return 0;
+
+      onProgress?.call('Buscando clientes en Google Drive...', 0.04);
+
+      final folderListRes = await api.files.list(
+        q: "'$clientsRootId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        $fields: 'files(id, name)',
+        pageSize: 500,
+      );
+
+      final clientFolders = folderListRes.files ?? [];
+      if (clientFolders.isEmpty) return 0;
+
+      final prefs = await SharedPreferences.getInstance();
+
+      final rawQuotes = prefs.getString('ej_quotes_history_list');
+      List<dynamic> quotesList = rawQuotes != null && rawQuotes.isNotEmpty ? jsonDecode(rawQuotes) : [];
+      final Set<String> existingQuoteFolios = quotesList
+          .map((e) => (e['folio'] ?? e['quoteFolio'] ?? '').toString().trim().toLowerCase())
+          .toSet();
+
+      final rawReports = prefs.getString('ej_reports_history_list');
+      List<dynamic> reportsList = rawReports != null && rawReports.isNotEmpty ? jsonDecode(rawReports) : [];
+      final Set<String> existingReportFolios = reportsList
+          .map((e) => (e['folio'] ?? e['reportFolio'] ?? '').toString().trim().toLowerCase())
+          .toSet();
+
+      bool quotesModified = false;
+      bool reportsModified = false;
+
+      for (int i = 0; i < clientFolders.length; i++) {
+        final clientFolder = clientFolders[i];
+        final clientName = clientFolder.name ?? '';
+        if (clientFolder.id == null || clientName.isEmpty) continue;
+
+        onProgress?.call('Escaneando $clientName (${i + 1}/${clientFolders.length})...', 0.05 + (0.05 * ((i + 1) / clientFolders.length)));
+
+        final subFoldersRes = await api.files.list(
+          q: "'${clientFolder.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+          $fields: 'files(id, name)',
+          pageSize: 20,
+        );
+
+        final subFolders = subFoldersRes.files ?? [];
+
+        for (final sub in subFolders) {
+          final subName = (sub.name ?? '').toLowerCase();
+          final subId = sub.id;
+          if (subId == null) continue;
+
+          if (subName.contains('cotizacion')) {
+            final pdfsRes = await api.files.list(
+              q: "'$subId' in parents and mimeType = 'application/pdf' and trashed = false",
+              $fields: 'files(id, name, createdTime, modifiedTime)',
+              pageSize: 100,
+            );
+            for (final f in pdfsRes.files ?? []) {
+              final fileName = f.name ?? '';
+              String folio = '';
+              final match = RegExp(r'(EJ[-_]COT[-_][\w-]+)', caseSensitive: false).firstMatch(fileName);
+              if (match != null) {
+                folio = match.group(1)!.replaceAll('_', '-');
+              } else {
+                folio = fileName.replaceAll('.pdf', '').replaceAll('Cotizacion_', '').replaceAll('Cotización_', '').trim();
+              }
+
+              if (folio.isNotEmpty && !existingQuoteFolios.contains(folio.toLowerCase())) {
+                existingQuoteFolios.add(folio.toLowerCase());
+                final dateStr = (f.createdTime ?? f.modifiedTime ?? DateTime.now()).toIso8601String();
+                quotesList.insert(0, {
+                  'folio': folio,
+                  'businessName': clientName,
+                  'clientName': clientName,
+                  'clientPhone': '',
+                  'clientAddress': '',
+                  'clientEmail': '',
+                  'quoteDate': dateStr,
+                  'validDays': 15,
+                  'validUntilDate': DateTime.now().add(const Duration(days: 15)).toIso8601String(),
+                  'totalAmount': 0.0,
+                  'subtotal': 0.0,
+                  'applyIva': false,
+                  'filePath': '',
+                  'itemsCount': 1,
+                  'savedAt': dateStr,
+                });
+                quotesModified = true;
+                discoveredCount++;
+              }
+            }
+          } else if (subName.contains('reporte')) {
+            final pdfsRes = await api.files.list(
+              q: "'$subId' in parents and mimeType = 'application/pdf' and trashed = false",
+              $fields: 'files(id, name, createdTime, modifiedTime)',
+              pageSize: 100,
+            );
+            for (final f in pdfsRes.files ?? []) {
+              final fileName = f.name ?? '';
+              String folio = '';
+              final match = RegExp(r'(EJ[-_][\w-]+)', caseSensitive: false).firstMatch(fileName);
+              if (match != null) {
+                folio = match.group(1)!.replaceAll('_', '-');
+              } else {
+                folio = fileName.replaceAll('.pdf', '').replaceAll('Reporte_', '').trim();
+              }
+
+              if (folio.isNotEmpty && !existingReportFolios.contains(folio.toLowerCase())) {
+                existingReportFolios.add(folio.toLowerCase());
+                final dateStr = (f.createdTime ?? f.modifiedTime ?? DateTime.now()).toIso8601String();
+                reportsList.insert(0, {
+                  'folio': folio,
+                  'businessName': clientName,
+                  'clientName': clientName,
+                  'clientPhone': '',
+                  'clientAddress': '',
+                  'serviceDate': dateStr,
+                  'technicianName': 'Técnico EJ',
+                  'targetedPests': [],
+                  'filePath': '',
+                  'savedAt': dateStr,
+                });
+                reportsModified = true;
+                discoveredCount++;
+              }
+            }
+          }
+        }
+      }
+
+      if (quotesModified) {
+        await prefs.setString('ej_quotes_history_list', jsonEncode(quotesList));
+      }
+      if (reportsModified) {
+        await prefs.setString('ej_reports_history_list', jsonEncode(reportsList));
+      }
+    } catch (e) {
+      debugPrint('Error en discoverDriveDocuments: $e');
+    }
+
+    return discoveredCount;
+  }
+
   // --- SINCRONIZACIÓN COMPLETA DE TODO EL HISTORIAL EXISTENTE ---
 
   Future<Map<String, int>> syncAllHistoryNow({Function(String status, double progress)? onProgress}) async {
@@ -1124,6 +1528,14 @@ class GoogleDriveSyncService {
     int quotesSynced = 0;
     int contractsSynced = 0;
     int layoutsSynced = 0;
+
+    // 0. Sincronización Bidireccional (PULL): Descargar y fusionar datos de Google Drive
+    onProgress?.call('Descargando y fusionando datos de Google Drive...', 0.02);
+    await pullAndMergeCloudDatabase(onProgress: onProgress);
+
+    // 0.5. Descubrir documentos PDF existentes en Drive que falten en el historial local
+    onProgress?.call('Escaneando archivos en Google Drive...', 0.06);
+    await discoverDriveDocuments(onProgress: onProgress);
 
     // 1. Sincronizar Reportes de Servicio
     onProgress?.call('Sincronizando Reportes de Servicio...', 0.1);
@@ -1280,9 +1692,9 @@ class GoogleDriveSyncService {
     onProgress?.call('Preparando carpetas de facturas para clientes...', 0.90);
     await ensureInvoiceFoldersForAllClients();
 
-    // 6. Respaldar base de datos completa
-    onProgress?.call('Creando respaldo maestro en Google Drive...', 0.95);
-    await backupDatabaseToCloud();
+    // 6. Respaldar base de datos unificada en Google Drive
+    onProgress?.call('Guardando base de datos unificada en Google Drive...', 0.95);
+    await backupDatabaseToCloud(force: true);
 
     // 7. Limpieza automática de duplicados para mantener el Drive impecable
     onProgress?.call('Verificando y unificando posibles duplicados...', 0.98);

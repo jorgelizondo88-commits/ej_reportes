@@ -277,6 +277,16 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         });
       }
     }
+
+    // Sincronización en segundo plano de dos vías (Cotizaciones y Reportes de Google Drive)
+    if (_driveService.isSignedIn) {
+      _driveService.pullAndMergeCloudDatabase().then((merged) async {
+        final discovered = await _driveService.discoverDriveDocuments();
+        if ((merged || discovered > 0) && mounted) {
+          _loadData();
+        }
+      });
+    }
   }
 
   @override
