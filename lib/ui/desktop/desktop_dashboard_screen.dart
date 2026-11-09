@@ -69,11 +69,36 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
     return fallback;
   }
 
+  Future<void> _persistResolvedFilePath(String prefsKey, String folio, String resolvedPath) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(prefsKey);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      final targetKey = _driveService.normalizeFolioKey(folio);
+      bool updated = false;
+      final list = decoded.map((e) {
+        final m = Map<String, dynamic>.from(e as Map);
+        if (_driveService.normalizeFolioKey((m['folio'] ?? '').toString()) == targetKey) {
+          m['filePath'] = resolvedPath;
+          updated = true;
+        }
+        return m;
+      }).toList();
+      if (updated) {
+        await prefs.setString(prefsKey, jsonEncode(list));
+      }
+    } catch (_) {}
+  }
+
   Future<void> _onSelectReport(Map<String, dynamic> item) async {
     final folio = (item['folio'] ?? 'S_N').toString();
+    final targetKey = _driveService.normalizeFolioKey(folio);
     final clientName = _docClientName(item);
     final currentPath = item['filePath'] as String?;
-    final localExists = currentPath != null && currentPath.isNotEmpty && File(currentPath).existsSync();
+    final currentFile = (currentPath != null && currentPath.isNotEmpty) ? File(currentPath) : null;
+    final localExists = currentFile != null && currentFile.existsSync() && currentFile.lengthSync() > 100;
 
     _failedDownloads.remove('Reporte-$folio');
 
@@ -85,33 +110,46 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
     if (!localExists) {
       try {
-        final downloaded = await _driveService.downloadDocumentPdf(
+        File? resolved = await _driveService.findLocalCachedPdf(
+          documentType: 'Reporte',
+          folio: folio,
+        );
+        resolved ??= await _driveService.downloadDocumentPdf(
           clientName: clientName,
           documentType: 'Reporte',
           folio: folio,
         );
-        if (mounted && _selectedReport != null && _selectedReport!['folio'].toString() == folio) {
-          if (downloaded != null && downloaded.existsSync()) {
+
+        if (resolved != null && resolved.existsSync() && resolved.lengthSync() > 100) {
+          item['filePath'] = resolved.path;
+          for (final r in _reports) {
+            if (_driveService.normalizeFolioKey((r['folio'] ?? '').toString()) == targetKey) {
+              r['filePath'] = resolved.path;
+            }
+          }
+          await _persistResolvedFilePath('ej_reports_history_list', folio, resolved.path);
+          if (mounted &&
+              _selectedReport != null &&
+              _driveService.normalizeFolioKey((_selectedReport!['folio'] ?? '').toString()) == targetKey) {
             setState(() {
-              _selectedReport!['filePath'] = downloaded.path;
-              item['filePath'] = downloaded.path;
-              _isLoadingPdf = false;
-              _loadingDocId = null;
-            });
-            try {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('ej_reports_history_list', jsonEncode(_reports));
-            } catch (_) {}
-          } else {
-            setState(() {
-              _failedDownloads.add('Reporte-$folio');
+              _selectedReport!['filePath'] = resolved!.path;
               _isLoadingPdf = false;
               _loadingDocId = null;
             });
           }
+        } else if (mounted &&
+            _selectedReport != null &&
+            _driveService.normalizeFolioKey((_selectedReport!['folio'] ?? '').toString()) == targetKey) {
+          setState(() {
+            _failedDownloads.add('Reporte-$folio');
+            _isLoadingPdf = false;
+            _loadingDocId = null;
+          });
         }
       } catch (e) {
-        if (mounted && _selectedReport != null && _selectedReport!['folio'].toString() == folio) {
+        if (mounted &&
+            _selectedReport != null &&
+            _driveService.normalizeFolioKey((_selectedReport!['folio'] ?? '').toString()) == targetKey) {
           setState(() {
             _failedDownloads.add('Reporte-$folio');
             _isLoadingPdf = false;
@@ -124,9 +162,11 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
   Future<void> _onSelectQuote(Map<String, dynamic> item) async {
     final folio = (item['folio'] ?? 'S_N').toString();
+    final targetKey = _driveService.normalizeFolioKey(folio);
     final clientName = _docClientName(item);
     final currentPath = item['filePath'] as String?;
-    final localExists = currentPath != null && currentPath.isNotEmpty && File(currentPath).existsSync();
+    final currentFile = (currentPath != null && currentPath.isNotEmpty) ? File(currentPath) : null;
+    final localExists = currentFile != null && currentFile.existsSync() && currentFile.lengthSync() > 100;
 
     _failedDownloads.remove('Cotización-$folio');
 
@@ -138,33 +178,46 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
     if (!localExists) {
       try {
-        final downloaded = await _driveService.downloadDocumentPdf(
+        File? resolved = await _driveService.findLocalCachedPdf(
+          documentType: 'Cotización',
+          folio: folio,
+        );
+        resolved ??= await _driveService.downloadDocumentPdf(
           clientName: clientName,
           documentType: 'Cotización',
           folio: folio,
         );
-        if (mounted && _selectedQuote != null && _selectedQuote!['folio'].toString() == folio) {
-          if (downloaded != null && downloaded.existsSync()) {
+
+        if (resolved != null && resolved.existsSync() && resolved.lengthSync() > 100) {
+          item['filePath'] = resolved.path;
+          for (final q in _quotes) {
+            if (_driveService.normalizeFolioKey((q['folio'] ?? '').toString()) == targetKey) {
+              q['filePath'] = resolved.path;
+            }
+          }
+          await _persistResolvedFilePath('ej_quotes_history_list', folio, resolved.path);
+          if (mounted &&
+              _selectedQuote != null &&
+              _driveService.normalizeFolioKey((_selectedQuote!['folio'] ?? '').toString()) == targetKey) {
             setState(() {
-              _selectedQuote!['filePath'] = downloaded.path;
-              item['filePath'] = downloaded.path;
-              _isLoadingPdf = false;
-              _loadingDocId = null;
-            });
-            try {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('ej_quotes_history_list', jsonEncode(_quotes));
-            } catch (_) {}
-          } else {
-            setState(() {
-              _failedDownloads.add('Cotización-$folio');
+              _selectedQuote!['filePath'] = resolved!.path;
               _isLoadingPdf = false;
               _loadingDocId = null;
             });
           }
+        } else if (mounted &&
+            _selectedQuote != null &&
+            _driveService.normalizeFolioKey((_selectedQuote!['folio'] ?? '').toString()) == targetKey) {
+          setState(() {
+            _failedDownloads.add('Cotización-$folio');
+            _isLoadingPdf = false;
+            _loadingDocId = null;
+          });
         }
       } catch (e) {
-        if (mounted && _selectedQuote != null && _selectedQuote!['folio'].toString() == folio) {
+        if (mounted &&
+            _selectedQuote != null &&
+            _driveService.normalizeFolioKey((_selectedQuote!['folio'] ?? '').toString()) == targetKey) {
           setState(() {
             _failedDownloads.add('Cotización-$folio');
             _isLoadingPdf = false;
@@ -212,6 +265,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
   Future<void> _loadAllData({bool syncFromCloud = true}) async {
     final prefs = await SharedPreferences.getInstance();
+    await _driveService.reconcileLocalHistoryStorage(prefs);
 
     // 1. Clientes
     final clients = await ClientService().getSavedClients();
@@ -259,12 +313,14 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
             _selectedReport = _reports.first;
             reportToLoad = _reports.first;
           } else {
-            final selFolio = (_selectedReport!['folio'] ?? '').toString();
-            final idx = _reports.indexWhere((r) => (r['folio'] ?? '').toString() == selFolio);
+            final selFolioKey = _driveService.normalizeFolioKey((_selectedReport!['folio'] ?? '').toString());
+            final idx = _reports.indexWhere(
+              (r) => _driveService.normalizeFolioKey((r['folio'] ?? '').toString()) == selFolioKey,
+            );
             _selectedReport = idx >= 0 ? _reports[idx] : _reports.first;
             if (!syncFromCloud && _selectedModuleIndex == 0) {
               final p = _selectedReport!['filePath'] as String?;
-              if (p == null || p.isEmpty || !File(p).existsSync()) {
+              if (p == null || p.isEmpty || !File(p).existsSync() || File(p).lengthSync() <= 100) {
                 reportToLoad = _selectedReport;
               }
             }
@@ -277,13 +333,15 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           if (_selectedQuote == null) {
             _selectedQuote = _quotes.first;
           } else {
-            final selFolio = (_selectedQuote!['folio'] ?? '').toString();
-            final idx = _quotes.indexWhere((q) => (q['folio'] ?? '').toString() == selFolio);
+            final selFolioKey = _driveService.normalizeFolioKey((_selectedQuote!['folio'] ?? '').toString());
+            final idx = _quotes.indexWhere(
+              (q) => _driveService.normalizeFolioKey((q['folio'] ?? '').toString()) == selFolioKey,
+            );
             _selectedQuote = idx >= 0 ? _quotes[idx] : _quotes.first;
           }
           if (!syncFromCloud && _selectedModuleIndex == 1) {
             final p = _selectedQuote!['filePath'] as String?;
-            if (p == null || p.isEmpty || !File(p).existsSync()) {
+            if (p == null || p.isEmpty || !File(p).existsSync() || File(p).lengthSync() <= 100) {
               quoteToLoad = _selectedQuote;
             }
           }
@@ -337,10 +395,14 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           final uploaded = await _driveService.processQueue(updateMasterBackup: false);
           final merged = await _driveService.pullAndMergeCloudDatabase();
           final discovered = await _driveService.discoverDriveDocuments();
+          final healed = await _driveService.reconcileLocalHistoryStorage(
+            prefs,
+            pushCleanToCloudIfDeduped: !uploaded,
+          );
           if (uploaded) {
             await _driveService.backupDatabaseToCloud(force: true);
           }
-          if ((merged || discovered > 0 || uploaded) && mounted) {
+          if ((merged || discovered > 0 || uploaded || healed) && mounted) {
             await _loadAllData(syncFromCloud: false);
           }
         }
@@ -550,12 +612,12 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           });
           if (index == 0 && _selectedReport != null) {
             final p = _selectedReport!['filePath'] as String?;
-            if (p == null || !File(p).existsSync()) {
+            if (p == null || p.isEmpty || !File(p).existsSync() || File(p).lengthSync() <= 100) {
               _onSelectReport(_selectedReport!);
             }
           } else if (index == 1 && _selectedQuote != null) {
             final p = _selectedQuote!['filePath'] as String?;
-            if (p == null || !File(p).existsSync()) {
+            if (p == null || p.isEmpty || !File(p).existsSync() || File(p).lengthSync() <= 100) {
               _onSelectQuote(_selectedQuote!);
             }
           } else if (index == 3) {
@@ -856,14 +918,16 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                           separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                           itemBuilder: (context, i) {
                             final item = filtered[i];
-                            final isSel = _selectedReport != null && _selectedReport!['folio'] == item['folio'];
+                            final isSel = _selectedReport != null &&
+                                _driveService.normalizeFolioKey((_selectedReport!['folio'] ?? '').toString()) ==
+                                    _driveService.normalizeFolioKey((item['folio'] ?? '').toString());
                             final clientName = _docClientName(item, fallback: 'Cliente');
                             final folio = (item['folio'] ?? 'S_N').toString();
 
                             final rawDate = (item['serviceDate'] ?? item['date'] ?? item['createdAt'] ?? '').toString();
                             String formattedDate = '';
                             if (rawDate.isNotEmpty) {
-                              final parsed = DateTime.tryParse(rawDate);
+                              final parsed = _driveService.parseHistoryDate(rawDate);
                               if (parsed != null) {
                                 formattedDate = DateFormat('dd/MM/yyyy').format(parsed);
                               } else {
@@ -1043,15 +1107,26 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                           separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                           itemBuilder: (context, i) {
                             final item = filtered[i];
-                            final isSel = _selectedQuote != null && _selectedQuote!['folio'] == item['folio'];
+                            final isSel = _selectedQuote != null &&
+                                _driveService.normalizeFolioKey((_selectedQuote!['folio'] ?? '').toString()) ==
+                                    _driveService.normalizeFolioKey((item['folio'] ?? '').toString());
                             final clientName = _docClientName(item, fallback: 'Cliente');
                             final folio = (item['folio'] ?? 'S_N').toString();
-                            final total = (item['total'] ?? item['amount'] ?? '').toString();
+                            final rawTotal = item['totalAmount'] ?? item['total'] ?? item['amount'];
+                            String total = '';
+                            if (rawTotal is num && rawTotal > 0) {
+                              total = NumberFormat.currency(locale: 'es_MX', symbol: '\$').format(rawTotal);
+                            } else if (rawTotal is String && rawTotal.trim().isNotEmpty) {
+                              final parsedNum = double.tryParse(rawTotal.replaceAll(RegExp(r'[^\d.]'), ''));
+                              total = (parsedNum != null && parsedNum > 0)
+                                  ? NumberFormat.currency(locale: 'es_MX', symbol: '\$').format(parsedNum)
+                                  : rawTotal.trim();
+                            }
 
                             final rawDate = (item['quoteDate'] ?? item['date'] ?? item['createdAt'] ?? '').toString();
                             String formattedDate = '';
                             if (rawDate.isNotEmpty) {
-                              final parsed = DateTime.tryParse(rawDate);
+                              final parsed = _driveService.parseHistoryDate(rawDate);
                               if (parsed != null) {
                                 formattedDate = DateFormat('dd/MM/yyyy').format(parsed);
                               } else {
@@ -1068,13 +1143,19 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                 padding: const EdgeInsets.only(top: 2),
                                 child: Row(
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFE2E8F0),
-                                        borderRadius: BorderRadius.circular(4),
+                                    Flexible(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFE2E8F0),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          'Folio: $folio',
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
+                                        ),
                                       ),
-                                      child: Text('Folio: $folio', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
                                     ),
                                     if (formattedDate.isNotEmpty) ...[
                                       const SizedBox(width: 8),
@@ -1563,7 +1644,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
     required String folio,
   }) {
     File? file = (filePath != null && filePath.isNotEmpty) ? File(filePath) : null;
-    final exists = file != null && file.existsSync();
+    final exists = file != null && file.existsSync() && file.lengthSync() > 100;
     final isCurrentlyLoading = _isLoadingPdf && _loadingDocId == '$documentType-$folio';
 
     return Column(
@@ -1637,11 +1718,21 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
               : exists
                   ? PdfPreview(
                       key: ValueKey('$documentType-$folio-${file.path}-${file.existsSync() ? file.lengthSync() : 0}'),
-                      build: (format) => file.readAsBytesSync(),
+                      build: (format) => file.readAsBytes(),
                       allowPrinting: true,
                       allowSharing: false,
                       canChangeOrientation: false,
                       canChangePageFormat: false,
+                      onError: (context, error) => Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.error_outline, size: 42, color: Colors.redAccent),
+                            const SizedBox(height: 10),
+                            Text('No se pudo renderizar el PDF: $error', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                          ],
+                        ),
+                      ),
                     )
                   : Center(
                       child: Column(
@@ -1649,7 +1740,12 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                         children: [
                           const Icon(Icons.cloud_off_outlined, size: 48, color: Color(0xFF94A3B8)),
                           const SizedBox(height: 10),
-                          Text('No se encontró el archivo físico de este $documentType en Google Drive.', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                          Text(
+                            _driveService.isSignedIn
+                                ? 'No se encontró el archivo físico de este documento en Google Drive.'
+                                : 'Conecta tu cuenta en "Nube Google Drive" para descargar este PDF.',
+                            style: const TextStyle(fontSize: 12, color: Colors.black54),
+                          ),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),

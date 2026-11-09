@@ -45,6 +45,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
 
   Future<void> _loadMetrics() async {
     final prefs = await SharedPreferences.getInstance();
+    await GoogleDriveSyncService().reconcileLocalHistoryStorage(prefs);
 
     final clients = await ClientService().getSavedClients();
 
@@ -81,11 +82,15 @@ class _MainHubScreenState extends State<MainHubScreen> {
       GoogleDriveSyncService().processQueue(updateMasterBackup: false).then((uploaded) async {
         final merged = await GoogleDriveSyncService().pullAndMergeCloudDatabase();
         final discovered = await GoogleDriveSyncService().discoverDriveDocuments();
+        final p = await SharedPreferences.getInstance();
+        final healed = await GoogleDriveSyncService().reconcileLocalHistoryStorage(
+          p,
+          pushCleanToCloudIfDeduped: !uploaded,
+        );
         if (uploaded) {
           await GoogleDriveSyncService().backupDatabaseToCloud(force: true);
         }
-        if ((merged || discovered > 0) && mounted) {
-          final p = await SharedPreferences.getInstance();
+        if ((merged || discovered > 0 || healed) && mounted) {
           final rR = p.getString('ej_reports_history_list');
           final rQ = p.getString('ej_quotes_history_list');
           final rS = p.getString('ej_schedules_history_list');

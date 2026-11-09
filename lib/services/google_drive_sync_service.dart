@@ -99,6 +99,7 @@ class GoogleDriveSyncService {
   final Map<String, Future<String>> _inFlightFolders = {};
   final Set<String> _verifiedFolderKeysThisSession = {};
   Future<void> _masterSyncLock = Future.value();
+  bool _pendingCloudCleanupPush = false;
 
   // Inicialización y recuperación de sesión previa silenciosa
   Future<bool> initSilently() async {
@@ -1047,6 +1048,7 @@ class GoogleDriveSyncService {
       }
 
       await prefs.setString(_lastBackupDateKey, DateTime.now().toIso8601String());
+      _pendingCloudCleanupPush = false;
       return true;
     } catch (e) {
       debugPrint('Error respaldando base de datos a Drive: $e');
@@ -1217,6 +1219,19 @@ class GoogleDriveSyncService {
       if (!data.containsKey('ej_saved_clients') && data['ej_saved_clients_list'] is String) {
         await prefs.setString('ej_saved_clients', data['ej_saved_clients_list'] as String);
       }
+
+      await reconcileLocalHistoryStorage(prefs);
+
+      try {
+        final cleanedQuotesRaw = prefs.getString('ej_quotes_history_list');
+        if (cleanedQuotesRaw != null && cleanedQuotesRaw.isNotEmpty) {
+          quotes = (jsonDecode(cleanedQuotesRaw) as List).length;
+        }
+        final cleanedReportsRaw = prefs.getString('ej_reports_history_list');
+        if (cleanedReportsRaw != null && cleanedReportsRaw.isNotEmpty) {
+          reports = (jsonDecode(cleanedReportsRaw) as List).length;
+        }
+      } catch (_) {}
 
       return DatabaseRestoreResult(
         success: true,
@@ -1405,11 +1420,377 @@ class GoogleDriveSyncService {
         }
       }
 
+      if (await reconcileLocalHistoryStorage(prefs)) {
+        changed = true;
+      }
+
       return changed;
     } catch (e) {
       debugPrint('Error en pullAndMergeCloudDatabase: $e');
       return false;
     }
+  }
+
+  // --- NORMALIZACIÓN, DEDUPLICACIÓN Y ORDENAMIENTO POR FECHA ---
+
+  static final RegExp _quoteFolioInFileNameRegex = RegExp(r'(EJ[-_]COT[-_](?:\d+[-_])?\d+)', caseSensitive: false);
+  static final RegExp _quoteSuffixedFolioRegex = RegExp(r'^(EJ[-_]COT[-_](?:\d+[-_])?\d+)[-_].+$', caseSensitive: false);
+  static final RegExp _reportFolioInFileNameRegex = RegExp(
+    r'(EJ[-_](?!COT[-_]|CAL[-_]|POL[-_]|LAY[-_]|CITA[-_])(?:\d+[-_])?\d+)',
+    caseSensitive: false,
+  );
+  static final RegExp _reportSuffixedFolioRegex = RegExp(
+    r'^(EJ[-_](?!COT[-_]|CAL[-_]|POL[-_]|LAY[-_]|CITA[-_])(?:\d+[-_])?\d+)[-_].+$',
+    caseSensitive: false,
+  );
+
+  String normalizeFolioKey(String folio) {
+    return folio.trim().replaceFirst(RegExp(r'^#+'), '').replaceAll('_', '-').toLowerCase();
+  }
+
+  String extractCanonicalFolioFromFileName(String fileName, {required bool isQuote}) {
+    final regex = isQuote ? _quoteFolioInFileNameRegex : _reportFolioInFileNameRegex;
+    final match = regex.firstMatch(fileName);
+    if (match != null) {
+      return match.group(1)!.replaceAll('_', '-').toUpperCase();
+    }
+    var cleaned = fileName.replaceAll(RegExp(r'\.pdf$', caseSensitive: false), '');
+    if (isQuote) {
+      cleaned = cleaned.replaceFirst(RegExp(r'^Cotizaci[oó]n_', caseSensitive: false), '');
+    } else {
+      cleaned = cleaned.replaceFirst(RegExp(r'^Reporte_', caseSensitive: false), '');
+    }
+    return cleaned.trim();
+  }
+
+  DateTime? parseHistoryDate(dynamic raw) {
+    if (raw == null) return null;
+    final str = raw.toString().trim();
+    if (str.isEmpty) return null;
+    final iso = DateTime.tryParse(str);
+    if (iso != null) return iso.toLocal();
+    final dmy = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})$').firstMatch(str);
+    if (dmy != null) {
+      final d = int.tryParse(dmy.group(1)!);
+      final m = int.tryParse(dmy.group(2)!);
+      final y = int.tryParse(dmy.group(3)!);
+      if (d != null && m != null && y != null) {
+        return DateTime(y, m, d);
+      }
+    }
+    return null;
+  }
+
+  int _folioSortKey(String folio) {
+    final norm = normalizeFolioKey(folio).toUpperCase();
+    final mmyyMatch = RegExp(r'EJ-(?:COT-|CAL-|POL-)?(\d{2})(\d{2})-(\d+)').firstMatch(norm);
+    if (mmyyMatch != null) {
+      final p1 = int.tryParse(mmyyMatch.group(1)!) ?? 0;
+      final p2 = int.tryParse(mmyyMatch.group(2)!) ?? 0;
+      final seq = int.tryParse(mmyyMatch.group(3)!) ?? 0;
+      // EJ-POL-YYYY-XXXX tiene p1=20, p2=26; Reportes/Cotizaciones usan MMYY (p1=01..12, p2=año)
+      if (p1 >= 19 && p2 >= 20) {
+        final fullYear = p1 * 100 + p2;
+        return fullYear * 1000000 + seq;
+      }
+      final fullYear = 2000 + p2;
+      return fullYear * 1000000 + p1 * 10000 + seq;
+    }
+    final trailingNum = RegExp(r'(\d+)$').firstMatch(norm);
+    return trailingNum != null ? (int.tryParse(trailingNum.group(1)!) ?? 0) : 0;
+  }
+
+  DateTime? extractDocumentDisplayDate(Map item, {required bool isQuote}) {
+    final candidates = isQuote
+        ? [item['quoteDate'], item['date'], item['savedAt'], item['updatedAt'], item['createdAt']]
+        : [item['serviceDate'], item['date'], item['savedAt'], item['updatedAt'], item['createdAt']];
+    for (final c in candidates) {
+      final parsed = parseHistoryDate(c);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+
+  int compareHistoryNewestFirst(Map a, Map b, {required bool isQuote}) {
+    final dtA = extractDocumentDisplayDate(a, isQuote: isQuote);
+    final dtB = extractDocumentDisplayDate(b, isQuote: isQuote);
+
+    if (dtA != null && dtB != null) {
+      final dayA = DateTime(dtA.year, dtA.month, dtA.day);
+      final dayB = DateTime(dtB.year, dtB.month, dtB.day);
+      final dayCmp = dayB.compareTo(dayA);
+      if (dayCmp != 0) return dayCmp;
+    } else if (dtA == null && dtB != null) {
+      return 1;
+    } else if (dtA != null && dtB == null) {
+      return -1;
+    }
+
+    final keyA = _folioSortKey((a['folio'] ?? '').toString());
+    final keyB = _folioSortKey((b['folio'] ?? '').toString());
+    if (keyA != keyB) return keyB.compareTo(keyA);
+
+    final saveA = parseHistoryDate(a['updatedAt'] ?? a['savedAt'] ?? a['createdAt']) ?? dtA;
+    final saveB = parseHistoryDate(b['updatedAt'] ?? b['savedAt'] ?? b['createdAt']) ?? dtB;
+    if (saveA != null && saveB != null) {
+      final cmp = saveB.compareTo(saveA);
+      if (cmp != 0) return cmp;
+    }
+
+    if (dtA != null && dtB != null) {
+      return dtB.compareTo(dtA);
+    }
+    return 0;
+  }
+
+  bool _isLocalPdfValidSync(String? path) {
+    if (path == null || path.trim().isEmpty) return false;
+    try {
+      final file = File(path);
+      return file.existsSync() && file.lengthSync() > 100;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isAutoDiscoveredShell(Map<String, dynamic> item, {required bool isQuote}) {
+    final phone = (item['clientPhone'] ?? '').toString().trim();
+    if (phone.isNotEmpty) return false;
+    if (isQuote) {
+      final totalAmount = (item['totalAmount'] as num?)?.toDouble() ?? 0.0;
+      final legacyTotal = item['total'] ?? item['amount'];
+      return totalAmount <= 0.0 && (legacyTotal == null || legacyTotal.toString().trim().isEmpty);
+    } else {
+      final tech = (item['technicianName'] ?? '').toString().trim();
+      final pests = item['targetedPests'];
+      final emptyPests = pests == null || (pests is List && pests.isEmpty);
+      return (tech.isEmpty || tech == 'Técnico EJ') && emptyPests;
+    }
+  }
+
+  ({List<Map<String, dynamic>> items, int removedDuplicates}) sanitizeAndSortHistory(
+    List<Map<String, dynamic>> rawItems, {
+    required bool isQuote,
+  }) {
+    final suffixRegex = isQuote ? _quoteSuffixedFolioRegex : _reportSuffixedFolioRegex;
+
+    // 1. Detectar folios base limpios ya existentes para fusionar duplicados generados por regex previo
+    final Map<String, Map<String, dynamic>> cleanByNorm = {};
+    final List<Map<String, dynamic>> candidates = rawItems.map((e) => Map<String, dynamic>.from(e)).toList();
+
+    for (final item in candidates) {
+      final folio = (item['folio'] ?? '').toString().trim();
+      if (folio.isEmpty) continue;
+      if (!suffixRegex.hasMatch(folio)) {
+        final norm = normalizeFolioKey(folio);
+        if (!cleanByNorm.containsKey(norm) || !_isAutoDiscoveredShell(item, isQuote: isQuote)) {
+          cleanByNorm[norm] = item;
+        }
+      }
+    }
+
+    int removedDuplicates = 0;
+    final Map<String, Map<String, dynamic>> deduplicated = {};
+
+    void mergeIntoSlot(String normKey, Map<String, dynamic> incoming) {
+      final existing = deduplicated[normKey];
+      if (existing == null) {
+        deduplicated[normKey] = incoming;
+        return;
+      }
+
+      removedDuplicates++;
+      final existingShell = _isAutoDiscoveredShell(existing, isQuote: isQuote);
+      final incomingShell = _isAutoDiscoveredShell(incoming, isQuote: isQuote);
+
+      Map<String, dynamic> winner;
+      Map<String, dynamic> loser;
+      if (existingShell && !incomingShell) {
+        winner = incoming;
+        loser = existing;
+      } else if (!existingShell && incomingShell) {
+        winner = existing;
+        loser = incoming;
+      } else {
+        final eSave = parseHistoryDate(existing['updatedAt'] ?? existing['savedAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final iSave = parseHistoryDate(incoming['updatedAt'] ?? incoming['savedAt']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        winner = iSave.isAfter(eSave) ? incoming : existing;
+        loser = identical(winner, incoming) ? existing : incoming;
+      }
+
+      if (!_isLocalPdfValidSync(winner['filePath'] as String?) && _isLocalPdfValidSync(loser['filePath'] as String?)) {
+        winner['filePath'] = loser['filePath'];
+      }
+      deduplicated[normKey] = winner;
+    }
+
+    for (final item in candidates) {
+      final rawFolio = (item['folio'] ?? '').toString().trim();
+      if (rawFolio.isEmpty) continue;
+
+      final suffixMatch = suffixRegex.firstMatch(rawFolio);
+      if (suffixMatch != null) {
+        final baseFolio = suffixMatch.group(1)!.replaceAll('_', '-').toUpperCase();
+        final baseNorm = normalizeFolioKey(baseFolio);
+        final isShell = _isAutoDiscoveredShell(item, isQuote: isQuote);
+
+        if (cleanByNorm.containsKey(baseNorm) && isShell) {
+          mergeIntoSlot(baseNorm, item);
+          continue;
+        }
+        if (isShell) {
+          item['folio'] = baseFolio;
+          mergeIntoSlot(baseNorm, item);
+          continue;
+        }
+      }
+
+      mergeIntoSlot(normalizeFolioKey(rawFolio), item);
+    }
+
+    final sorted = deduplicated.values.toList()
+      ..sort((a, b) => compareHistoryNewestFirst(a, b, isQuote: isQuote));
+
+    return (items: sorted, removedDuplicates: removedDuplicates);
+  }
+
+  Future<File?> findLocalCachedPdf({
+    required String documentType,
+    required String folio,
+    Directory? documentsDirectoryOverride,
+  }) async {
+    final cleanNoHash = folio.trim().replaceFirst(RegExp(r'^#+'), '');
+    if (cleanNoHash.isEmpty) return null;
+
+    final cleanFolio = cleanNoHash.replaceAll(RegExp(r'[^\w-]'), '_');
+    final dashVariant = cleanFolio.replaceAll('_', '-').toLowerCase();
+    final underVariant = cleanFolio.replaceAll('-', '_').toLowerCase();
+
+    try {
+      final docsDir = documentsDirectoryOverride ?? await getApplicationDocumentsDirectory();
+      final List<String> subDirs;
+      if (documentType.contains('Cotiz')) {
+        subDirs = ['Cotizaciones', 'cotizaciones_guardadas'];
+      } else if (documentType.contains('Contrat')) {
+        subDirs = ['Contratos', 'contratos_guardados'];
+      } else {
+        subDirs = ['Reportes', 'reportes_guardados'];
+      }
+
+      final escapedDash = RegExp.escape(dashVariant);
+      final escapedUnder = RegExp.escape(underVariant);
+      final boundaryRegex = RegExp('(?:^|[^0-9a-zA-Z])(?:$escapedDash|$escapedUnder)(?:[^0-9]|\$)', caseSensitive: false);
+
+      final List<File> matches = [];
+      for (final sub in subDirs) {
+        final dir = Directory('${docsDir.path}/$sub');
+        if (!dir.existsSync()) continue;
+        for (final entity in dir.listSync()) {
+          if (entity is! File) continue;
+          final name = entity.uri.pathSegments.last;
+          if (!name.toLowerCase().endsWith('.pdf')) continue;
+          if (boundaryRegex.hasMatch(name) && entity.lengthSync() > 100) {
+            matches.add(entity);
+          }
+        }
+      }
+
+      if (matches.isEmpty) return null;
+      // Preferir el archivo más reciente en caso de existir varias variantes de nombre
+      matches.sort((a, b) => b.lastModifiedSync().compareTo(a.lastModifiedSync()));
+      final best = matches.first;
+      // Verificar cabecera %PDF
+      final raf = await best.open();
+      try {
+        final header = await raf.read(4);
+        if (header.length == 4 && header[0] == 0x25 && header[1] == 0x50 && header[2] == 0x44 && header[3] == 0x46) {
+          return best;
+        }
+      } finally {
+        await raf.close();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> reconcileLocalHistoryStorage(
+    SharedPreferences prefs, {
+    bool pushCleanToCloudIfDeduped = false,
+    Directory? documentsDirectoryOverride,
+  }) async {
+    bool anyChanged = false;
+    int totalRemoved = 0;
+
+    Future<void> processKey(String storageKey, {required bool isQuote, required String docType}) async {
+      final raw = prefs.getString(storageKey);
+      if (raw == null || raw.isEmpty) return;
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is! List) return;
+        final list = decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        final res = sanitizeAndSortHistory(list, isQuote: isQuote);
+        totalRemoved += res.removedDuplicates;
+
+        for (final item in res.items) {
+          final currentPath = item['filePath'] as String?;
+          if (!_isLocalPdfValidSync(currentPath)) {
+            final folio = (item['folio'] ?? '').toString();
+            final cached = await findLocalCachedPdf(
+              documentType: docType,
+              folio: folio,
+              documentsDirectoryOverride: documentsDirectoryOverride,
+            );
+            if (cached != null) {
+              item['filePath'] = cached.path;
+            }
+          }
+        }
+
+        // Re-leer brevemente por si otra operación actualizó filePath mientras buscábamos en disco
+        final latestRaw = prefs.getString(storageKey);
+        if (latestRaw != null && latestRaw != raw) {
+          try {
+            final latestList = jsonDecode(latestRaw) as List;
+            final latestPaths = <String, String>{};
+            for (final e in latestList.whereType<Map>()) {
+              final k = normalizeFolioKey((e['folio'] ?? '').toString());
+              final p = e['filePath'] as String?;
+              if (k.isNotEmpty && _isLocalPdfValidSync(p)) {
+                latestPaths[k] = p!;
+              }
+            }
+            for (final item in res.items) {
+              final k = normalizeFolioKey((item['folio'] ?? '').toString());
+              if (!_isLocalPdfValidSync(item['filePath'] as String?) && latestPaths.containsKey(k)) {
+                item['filePath'] = latestPaths[k];
+              }
+            }
+          } catch (_) {}
+        }
+
+        final encoded = jsonEncode(res.items);
+        if (encoded != latestRaw) {
+          await prefs.setString(storageKey, encoded);
+          anyChanged = true;
+        }
+      } catch (_) {}
+    }
+
+    await processKey('ej_quotes_history_list', isQuote: true, docType: 'Cotización');
+    await processKey('ej_reports_history_list', isQuote: false, docType: 'Reporte');
+
+    if (totalRemoved > 0) {
+      _pendingCloudCleanupPush = true;
+    }
+
+    if (pushCleanToCloudIfDeduped && _pendingCloudCleanupPush && isSignedIn && _hasLocalDatabaseRecords(prefs)) {
+      try {
+        final pushed = await backupDatabaseToCloud(force: false);
+        if (pushed) _pendingCloudCleanupPush = false;
+      } catch (_) {}
+    }
+
+    return anyChanged;
   }
 
   String _extractTimestamp(Map item) {
@@ -1442,26 +1823,32 @@ class GoogleDriveSyncService {
 
       final Map<String, Map<String, dynamic>> map = {};
 
+      String normKeyVal(Map item) {
+        final raw = (item[uniqueKey] ?? '').toString().trim();
+        if (raw.isEmpty) return '';
+        return uniqueKey == 'folio' ? normalizeFolioKey(raw) : raw;
+      }
+
       for (final item in cloudList) {
         if (item is Map) {
-          final u = (item[uniqueKey] ?? '').toString().trim();
+          final u = normKeyVal(item);
           if (u.isNotEmpty) map[u] = Map<String, dynamic>.from(item);
         }
       }
 
       for (final item in localList) {
         if (item is Map) {
-          final u = (item[uniqueKey] ?? '').toString().trim();
+          final u = normKeyVal(item);
           if (u.isNotEmpty) {
             if (!map.containsKey(u)) {
               map[u] = Map<String, dynamic>.from(item);
             } else {
-              final cloudSaved = _extractTimestamp(map[u]!);
-              final localSaved = _extractTimestamp(item);
+              final cloudSavedDt = parseHistoryDate(_extractTimestamp(map[u]!)) ?? DateTime.fromMillisecondsSinceEpoch(0);
+              final localSavedDt = parseHistoryDate(_extractTimestamp(item)) ?? DateTime.fromMillisecondsSinceEpoch(0);
               final localFilePath = item['filePath'] as String?;
               final localPdfPath = item['pdfPath'] as String?;
 
-              if (localSaved.compareTo(cloudSaved) >= 0) {
+              if (!localSavedDt.isBefore(cloudSavedDt)) {
                 final existingCloudFilePath = map[u]!['filePath'];
                 final existingCloudPdfPath = map[u]!['pdfPath'];
                 map[u] = Map<String, dynamic>.from(item);
@@ -1484,8 +1871,14 @@ class GoogleDriveSyncService {
         }
       }
 
-      final merged = map.values.toList()
-        ..sort((a, b) => _extractTimestamp(b).compareTo(_extractTimestamp(a)));
+      final merged = map.values.toList();
+      if (key == 'ej_quotes_history_list') {
+        merged.sort((a, b) => compareHistoryNewestFirst(a, b, isQuote: true));
+      } else if (key == 'ej_reports_history_list') {
+        merged.sort((a, b) => compareHistoryNewestFirst(a, b, isQuote: false));
+      } else {
+        merged.sort((a, b) => _extractTimestamp(b).compareTo(_extractTimestamp(a)));
+      }
 
       final encoded = jsonEncode(merged);
       if (encoded == (localRaw ?? '')) return false;
@@ -1656,21 +2049,26 @@ class GoogleDriveSyncService {
       if (clientFolders.isEmpty) return 0;
 
       final prefs = await SharedPreferences.getInstance();
+      await reconcileLocalHistoryStorage(prefs);
 
       final rawQuotes = prefs.getString('ej_quotes_history_list');
       List<dynamic> quotesList = rawQuotes != null && rawQuotes.isNotEmpty ? jsonDecode(rawQuotes) : [];
       final Set<String> existingQuoteFolios = quotesList
-          .map((e) => (e['folio'] ?? e['quoteFolio'] ?? '').toString().trim().toLowerCase())
+          .map((e) => normalizeFolioKey((e['folio'] ?? e['quoteFolio'] ?? '').toString()))
+          .where((k) => k.isNotEmpty)
           .toSet();
 
       final rawReports = prefs.getString('ej_reports_history_list');
       List<dynamic> reportsList = rawReports != null && rawReports.isNotEmpty ? jsonDecode(rawReports) : [];
       final Set<String> existingReportFolios = reportsList
-          .map((e) => (e['folio'] ?? e['reportFolio'] ?? '').toString().trim().toLowerCase())
+          .map((e) => normalizeFolioKey((e['folio'] ?? e['reportFolio'] ?? '').toString()))
+          .where((k) => k.isNotEmpty)
           .toSet();
 
       bool quotesModified = false;
       bool reportsModified = false;
+      final List<Map<String, dynamic>> newlyDiscoveredQuotes = [];
+      final List<Map<String, dynamic>> newlyDiscoveredReports = [];
 
       for (int i = 0; i < clientFolders.length; i++) {
         final clientFolder = clientFolders[i];
@@ -1700,18 +2098,13 @@ class GoogleDriveSyncService {
             );
             for (final f in pdfsRes.files ?? []) {
               final fileName = f.name ?? '';
-              String folio = '';
-              final match = RegExp(r'(EJ[-_]COT[-_][\w-]+)', caseSensitive: false).firstMatch(fileName);
-              if (match != null) {
-                folio = match.group(1)!.replaceAll('_', '-');
-              } else {
-                folio = fileName.replaceAll('.pdf', '').replaceAll('Cotizacion_', '').replaceAll('Cotización_', '').trim();
-              }
+              final folio = extractCanonicalFolioFromFileName(fileName, isQuote: true);
+              final normFolio = normalizeFolioKey(folio);
 
-              if (folio.isNotEmpty && !existingQuoteFolios.contains(folio.toLowerCase())) {
-                existingQuoteFolios.add(folio.toLowerCase());
+              if (normFolio.isNotEmpty && !existingQuoteFolios.contains(normFolio)) {
+                existingQuoteFolios.add(normFolio);
                 final dateStr = (f.createdTime ?? f.modifiedTime ?? DateTime.now()).toIso8601String();
-                quotesList.insert(0, {
+                newlyDiscoveredQuotes.add({
                   'folio': folio,
                   'businessName': clientName,
                   'clientName': clientName,
@@ -1740,18 +2133,13 @@ class GoogleDriveSyncService {
             );
             for (final f in pdfsRes.files ?? []) {
               final fileName = f.name ?? '';
-              String folio = '';
-              final match = RegExp(r'(EJ[-_][\w-]+)', caseSensitive: false).firstMatch(fileName);
-              if (match != null) {
-                folio = match.group(1)!.replaceAll('_', '-');
-              } else {
-                folio = fileName.replaceAll('.pdf', '').replaceAll('Reporte_', '').trim();
-              }
+              final folio = extractCanonicalFolioFromFileName(fileName, isQuote: false);
+              final normFolio = normalizeFolioKey(folio);
 
-              if (folio.isNotEmpty && !existingReportFolios.contains(folio.toLowerCase())) {
-                existingReportFolios.add(folio.toLowerCase());
+              if (normFolio.isNotEmpty && !existingReportFolios.contains(normFolio)) {
+                existingReportFolios.add(normFolio);
                 final dateStr = (f.createdTime ?? f.modifiedTime ?? DateTime.now()).toIso8601String();
-                reportsList.insert(0, {
+                newlyDiscoveredReports.add({
                   'folio': folio,
                   'businessName': clientName,
                   'clientName': clientName,
@@ -1772,10 +2160,24 @@ class GoogleDriveSyncService {
       }
 
       if (quotesModified) {
-        await prefs.setString('ej_quotes_history_list', jsonEncode(quotesList));
+        final latestRawQ = prefs.getString('ej_quotes_history_list');
+        final List<dynamic> latestQ = latestRawQ != null && latestRawQ.isNotEmpty ? jsonDecode(latestRawQ) : [];
+        final combinedQ = [
+          ...latestQ.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+          ...newlyDiscoveredQuotes,
+        ];
+        final cleaned = sanitizeAndSortHistory(combinedQ, isQuote: true);
+        await prefs.setString('ej_quotes_history_list', jsonEncode(cleaned.items));
       }
       if (reportsModified) {
-        await prefs.setString('ej_reports_history_list', jsonEncode(reportsList));
+        final latestRawR = prefs.getString('ej_reports_history_list');
+        final List<dynamic> latestR = latestRawR != null && latestRawR.isNotEmpty ? jsonDecode(latestRawR) : [];
+        final combinedR = [
+          ...latestR.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+          ...newlyDiscoveredReports,
+        ];
+        final cleaned = sanitizeAndSortHistory(combinedR, isQuote: false);
+        await prefs.setString('ej_reports_history_list', jsonEncode(cleaned.items));
       }
     } catch (e) {
       debugPrint('Error en discoverDriveDocuments: $e');
@@ -2539,7 +2941,8 @@ class GoogleDriveSyncService {
     if (api == null) return null;
 
     try {
-      final cleanFolio = folio.trim().replaceAll(RegExp(r'[^\w-]'), '_');
+      final folioWithoutHash = folio.trim().replaceFirst(RegExp(r'^#+'), '');
+      final cleanFolio = folioWithoutHash.replaceAll(RegExp(r'[^\w-]'), '_');
       final altFolioDash = cleanFolio.replaceAll('_', '-');
       final altFolioUnderscore = cleanFolio.replaceAll('-', '_');
       final targetFolderId = clientName.trim().isNotEmpty
@@ -2558,20 +2961,14 @@ class GoogleDriveSyncService {
         candidates = res.files ?? [];
       }
 
-      // 2. Si no se encontró en la subcarpeta, buscar en la carpeta raíz del cliente
-      if (candidates.isEmpty && clientName.trim().isNotEmpty) {
-        final clientFolderId = await _getClientFolderId(api, clientName);
-        if (clientFolderId != null) {
-          final res = await api.files.list(
-            q: "'$clientFolderId' in parents and mimeType = 'application/pdf' and trashed = false",
-            $fields: 'files(id, name, createdTime)',
-            pageSize: 200,
-          );
-          candidates = res.files ?? [];
-        }
+      bool matchesFolioStrict(String name) {
+        if (cleanFolio.isEmpty) return false;
+        final escapedDash = RegExp.escape(altFolioDash);
+        final escapedUnder = RegExp.escape(altFolioUnderscore);
+        return RegExp('(?:^|[^0-9a-zA-Z])(?:$escapedDash|$escapedUnder)(?:[^0-9]|\$)', caseSensitive: false).hasMatch(name);
       }
 
-      bool matchesFolio(String name) {
+      bool matchesFolioLoose(String name) {
         if (cleanFolio.isEmpty) return false;
         final lower = name.toLowerCase();
         return lower.contains(cleanFolio.toLowerCase()) ||
@@ -2579,23 +2976,37 @@ class GoogleDriveSyncService {
             lower.contains(altFolioUnderscore.toLowerCase());
       }
 
-      // 3. Buscar el archivo que contenga el folio o coincida con el nombre preferido
-      drive.File? matchedFile;
-      for (final f in candidates) {
-        final name = f.name ?? '';
-        if (matchesFolio(name)) {
-          matchedFile = f;
-          break;
+      drive.File? pickFromCandidates(List<drive.File> list) {
+        for (final f in list) {
+          if (matchesFolioStrict(f.name ?? '')) return f;
         }
+        for (final f in list) {
+          if (matchesFolioLoose(f.name ?? '')) return f;
+        }
+        if (preferredFileName != null && preferredFileName.isNotEmpty) {
+          final normPref = preferredFileName.toLowerCase();
+          for (final f in list) {
+            if ((f.name ?? '').toLowerCase().contains(normPref)) return f;
+          }
+        }
+        return null;
       }
 
-      if (matchedFile == null && preferredFileName != null && preferredFileName.isNotEmpty) {
-        final normPref = preferredFileName.toLowerCase();
-        for (final f in candidates) {
-          if ((f.name ?? '').toLowerCase().contains(normPref)) {
-            matchedFile = f;
-            break;
-          }
+      // 2. Buscar coincidencia en la subcarpeta de categoría
+      drive.File? matchedFile = pickFromCandidates(candidates);
+
+      // 3. Si aún no se encontró, buscar también en la carpeta raíz del cliente
+      if (matchedFile == null && clientName.trim().isNotEmpty) {
+        final clientFolderId = await _getClientFolderId(api, clientName);
+        if (clientFolderId != null) {
+          final res = await api.files.list(
+            q: "'$clientFolderId' in parents and mimeType = 'application/pdf' and trashed = false",
+            $fields: 'files(id, name, createdTime)',
+            pageSize: 200,
+          );
+          final rootFiles = res.files ?? [];
+          if (candidates.isEmpty) candidates = rootFiles;
+          matchedFile = pickFromCandidates(rootFiles);
         }
       }
 
@@ -2622,8 +3033,11 @@ class GoogleDriveSyncService {
             if (documentType.contains('Crono')) prefix = 'cronograma';
             if (documentType.contains('Plan')) prefix = 'plano';
             matchedFile = globalFiles.firstWhere(
-              (f) => prefix.isEmpty || (f.name ?? '').toLowerCase().contains(prefix),
-              orElse: () => globalFiles.first,
+              (f) => (prefix.isEmpty || (f.name ?? '').toLowerCase().contains(prefix)) && matchesFolioStrict(f.name ?? ''),
+              orElse: () => globalFiles.firstWhere(
+                (f) => prefix.isEmpty || (f.name ?? '').toLowerCase().contains(prefix),
+                orElse: () => globalFiles.first,
+              ),
             );
           }
         } catch (_) {}
@@ -2660,6 +3074,10 @@ class GoogleDriveSyncService {
       final sink = localFile.openWrite();
       await media.stream.pipe(sink);
       await sink.close();
+
+      if (!localFile.existsSync() || localFile.lengthSync() <= 0) {
+        return null;
+      }
 
       return localFile;
     } catch (e) {

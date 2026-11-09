@@ -38,7 +38,12 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     if (drive.isSignedIn) {
       final merged = await drive.pullAndMergeCloudDatabase();
       final discovered = await drive.discoverDriveDocuments();
-      if ((merged || discovered > 0) && mounted) {
+      final prefs = await SharedPreferences.getInstance();
+      final healed = await drive.reconcileLocalHistoryStorage(
+        prefs,
+        pushCleanToCloudIfDeduped: true,
+      );
+      if ((merged || discovered > 0 || healed) && mounted) {
         _loadHistory();
       }
     }
@@ -47,6 +52,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
   Future<void> _loadHistory() async {
     setState(() => _isLoading = true);
     final prefs = await SharedPreferences.getInstance();
+    await GoogleDriveSyncService().reconcileLocalHistoryStorage(prefs);
     final raw = prefs.getString(_historyKey);
 
     if (raw != null && raw.isNotEmpty) {
@@ -90,30 +96,37 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
         ? report['businessName'].toString().trim()
         : (report['clientName'] ?? '').toString().trim();
 
-    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), descargarlo de Drive
-    if (file == null || !file.existsSync()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                SizedBox(width: 12),
-                Text('Descargando reporte desde Google Drive...'),
-              ],
-            ),
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
-
-      file = await GoogleDriveSyncService().downloadDocumentPdf(
-        clientName: clientTitle,
+    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), revisar caché local o descargar de Drive
+    if (file == null || !file.existsSync() || file.lengthSync() <= 100) {
+      file = await GoogleDriveSyncService().findLocalCachedPdf(
         documentType: 'Reporte',
         folio: folio,
       );
 
-      if (file == null || !file.existsSync()) {
+      if (file == null || !file.existsSync() || file.lengthSync() <= 100) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                  SizedBox(width: 12),
+                  Text('Descargando reporte desde Google Drive...'),
+                ],
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+
+        file = await GoogleDriveSyncService().downloadDocumentPdf(
+          clientName: clientTitle,
+          documentType: 'Reporte',
+          folio: folio,
+        );
+      }
+
+      if (file == null || !file.existsSync() || file.lengthSync() <= 100) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('No se pudo encontrar el archivo en Google Drive.')),
@@ -166,30 +179,37 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
         ? report['businessName'].toString().trim()
         : (report['clientName'] ?? '').toString().trim();
 
-    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), descargarlo de Drive
-    if (file == null || !file.existsSync()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                SizedBox(width: 12),
-                Text('Descargando reporte desde Google Drive...'),
-              ],
-            ),
-            duration: Duration(seconds: 4),
-          ),
-        );
-      }
-
-      file = await GoogleDriveSyncService().downloadDocumentPdf(
-        clientName: clientTitle,
+    // Si el archivo físico no existe en este dispositivo (ej. restaurado en otro teléfono), revisar caché local o descargar de Drive
+    if (file == null || !file.existsSync() || file.lengthSync() <= 100) {
+      file = await GoogleDriveSyncService().findLocalCachedPdf(
         documentType: 'Reporte',
         folio: folio,
       );
 
-      if (file == null || !file.existsSync()) {
+      if (file == null || !file.existsSync() || file.lengthSync() <= 100) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                  SizedBox(width: 12),
+                  Text('Descargando reporte desde Google Drive...'),
+                ],
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+
+        file = await GoogleDriveSyncService().downloadDocumentPdf(
+          clientName: clientTitle,
+          documentType: 'Reporte',
+          folio: folio,
+        );
+      }
+
+      if (file == null || !file.existsSync() || file.lengthSync() <= 100) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('No se pudo encontrar el archivo en Google Drive.')),
@@ -425,8 +445,8 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
                 final business = item['businessName'] ?? '';
                 final contact = item['clientName'] ?? '';
                 final folio = item['folio'] ?? 'Sin Folio';
-                final dateStr = item['serviceDate'] ?? '';
-                final parsedDate = DateTime.tryParse(dateStr);
+                final dateStr = item['serviceDate'] ?? item['date'] ?? '';
+                final parsedDate = GoogleDriveSyncService().parseHistoryDate(dateStr);
                 final tech = item['technicianName'] ?? '';
 
                 final mainTitle = business.isNotEmpty ? business : contact;
