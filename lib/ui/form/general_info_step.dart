@@ -64,6 +64,7 @@ class _GeneralInfoStepState extends State<GeneralInfoStep> {
   final ClientService _clientService = ClientService();
   List<ClientModel> _savedClients = [];
   List<ClientTrapTemplate> _currentClientTraps = [];
+  bool _isSavingClient = false;
 
   late TextEditingController _folioController;
   late TextEditingController _techController;
@@ -280,6 +281,8 @@ class _GeneralInfoStepState extends State<GeneralInfoStep> {
   }
 
   Future<void> _saveCurrentClient() async {
+    if (_isSavingClient) return;
+
     if (_businessController.text.trim().isEmpty && _clientController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ingresa al menos la empresa o el nombre del cliente.')),
@@ -287,29 +290,41 @@ class _GeneralInfoStepState extends State<GeneralInfoStep> {
       return;
     }
 
-    final newClient = ClientModel(
-      id: widget.data.activeClientId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      businessName: _businessController.text.trim(),
-      contactName: _clientController.text.trim(),
-      address: _addressController.text.trim(),
-      phone: _phoneController.text.trim(),
-      email: _emailController.text.trim(),
-      facilityType: widget.data.facilityType,
-      hasTraps: widget.data.hasTraps,
-      defaultTraps: _currentClientTraps,
-    );
+    setState(() => _isSavingClient = true);
 
-    await _clientService.saveClient(newClient);
-    widget.data.activeClientId = newClient.id;
-    await _loadClients();
+    bool cloudOk = false;
+    try {
+      final newClient = ClientModel(
+        id: widget.data.activeClientId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        businessName: _businessController.text.trim(),
+        contactName: _clientController.text.trim(),
+        address: _addressController.text.trim(),
+        phone: _phoneController.text.trim(),
+        email: _emailController.text.trim(),
+        facilityType: widget.data.facilityType,
+        hasTraps: widget.data.hasTraps,
+        defaultTraps: _currentClientTraps,
+      );
+
+      cloudOk = await _clientService.saveClient(newClient);
+      widget.data.activeClientId = newClient.id;
+      await _loadClients();
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingClient = false);
+      }
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '¡Cliente guardado con ${_currentClientTraps.length} trampas en inventario!',
+            cloudOk
+                ? '¡Cliente guardado (${_currentClientTraps.length} trampas) y Copia Maestra actualizada en Drive!'
+                : '¡Cliente guardado localmente con ${_currentClientTraps.length} trampas! (Sin conexión a Drive)',
           ),
-          backgroundColor: Colors.green.shade800,
+          backgroundColor: cloudOk ? Colors.green.shade800 : Colors.orange.shade800,
+          duration: const Duration(seconds: 4),
         ),
       );
     }
@@ -477,9 +492,15 @@ class _GeneralInfoStepState extends State<GeneralInfoStep> {
                       const Text('Datos del Cliente', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       FilledButton.icon(
                         style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F2B48)),
-                        icon: const Icon(Icons.save, size: 16),
-                        label: const Text('Guardar'),
-                        onPressed: _saveCurrentClient,
+                        icon: _isSavingClient
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.save, size: 16),
+                        label: Text(_isSavingClient ? 'Guardando...' : 'Guardar'),
+                        onPressed: _isSavingClient ? null : _saveCurrentClient,
                       ),
                     ],
                   ),

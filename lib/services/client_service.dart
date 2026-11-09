@@ -21,30 +21,75 @@ class ClientService {
   }
 
   // Guardar o actualizar un cliente
-  Future<void> saveClient(ClientModel client, {bool syncToCloud = true}) async {
+  Future<bool> saveClient(
+    ClientModel client, {
+    bool syncToCloud = true,
+    bool syncMasterBackup = true,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final List<ClientModel> clients = await getSavedClients();
 
-    final existingIndex = clients.indexWhere(
-          (c) => c.businessName.trim().toLowerCase() == client.businessName.trim().toLowerCase(),
-    );
+    final normalizedTarget = (client.businessName.trim().isNotEmpty ? client.businessName : client.contactName)
+        .trim()
+        .toLowerCase();
+
+    final existingIndex = clients.indexWhere((c) {
+      final current = (c.businessName.trim().isNotEmpty ? c.businessName : c.contactName).trim().toLowerCase();
+      return current.isNotEmpty && current == normalizedTarget;
+    });
+
+    final clientToSave = syncToCloud
+        ? client.copyWith(
+            updatedAt: DateTime.now(),
+            driveFolderId: client.driveFolderId ?? (existingIndex >= 0 ? clients[existingIndex].driveFolderId : null),
+            driveFolderShareUrl: client.driveFolderShareUrl ?? (existingIndex >= 0 ? clients[existingIndex].driveFolderShareUrl : null),
+          )
+        : client;
 
     if (existingIndex >= 0) {
-      clients[existingIndex] = client;
+      clients[existingIndex] = clientToSave;
     } else {
-      clients.add(client);
+      clients.add(clientToSave);
     }
 
     final String encoded = jsonEncode(clients.map((c) => c.toMap()).toList());
     await prefs.setString(_storageKey, encoded);
 
-    // En segundo plano: crear carpeta en Drive, subcarpetas de facturación, generar link de WhatsApp y actualizar snapshot maestro
+    // Crear carpeta en Drive, subcarpetas de facturación, generar link de WhatsApp y actualizar copia maestra automáticamente
     if (syncToCloud) {
       try {
-        GoogleDriveSyncService().getOrCreateClientFolderShareLink(client.businessName);
-        GoogleDriveSyncService().ensureInvoiceFoldersExist(client.businessName);
-        GoogleDriveSyncService().backupDatabaseToCloud();
-      } catch (_) {}
+        final folderName = clientToSave.businessName.trim().isNotEmpty
+            ? clientToSave.businessName.trim()
+            : clientToSave.contactName.trim();
+        await GoogleDriveSyncService().getOrCreateClientFolderShareLink(folderName);
+        await GoogleDriveSyncService().ensureInvoiceFoldersExist(folderName);
+        if (syncMasterBackup) {
+          return await GoogleDriveSyncService().saveAndSyncMasterBackup();
+        }
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /// Registra el cliente localmente solo si aún no existe en el directorio (sin sobreescribir inventario/trampas existentes).
+  Future<void> ensureClientExistsLocal(ClientModel client) async {
+    final key = (client.businessName.trim().isNotEmpty ? client.businessName : client.contactName)
+        .trim()
+        .toLowerCase();
+    if (key.isEmpty) return;
+
+    final clients = await getSavedClients();
+    final exists = clients.any((c) {
+      final current = (c.businessName.trim().isNotEmpty ? c.businessName : c.contactName).trim().toLowerCase();
+      return current == key;
+    });
+    if (!exists) {
+      clients.add(client.copyWith(updatedAt: client.updatedAt ?? DateTime.now()));
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, jsonEncode(clients.map((c) => c.toMap()).toList()));
     }
   }
 }

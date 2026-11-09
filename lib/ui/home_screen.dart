@@ -297,13 +297,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         defaultTraps: updatedTraps,
       );
 
-      await clientService.saveClient(updatedClient);
+      final bool cloudOk = await clientService.saveClient(updatedClient);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Inventario permanente del cliente actualizado con ${_traps.length} trampas.'),
-            backgroundColor: Colors.green.shade800,
+            content: Text(
+              cloudOk
+                  ? 'Inventario del cliente actualizado (${_traps.length} trampas) y Copia Maestra actualizada en Drive.'
+                  : 'Inventario guardado localmente con ${_traps.length} trampas (pendiente conexión a Drive).',
+            ),
+            backgroundColor: cloudOk ? Colors.green.shade800 : Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
           ),
         );
       }

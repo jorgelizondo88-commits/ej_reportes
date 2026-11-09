@@ -5,9 +5,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../models/client_model.dart';
 import '../../models/contract_model.dart';
 import '../../models/schedule_model.dart';
 import '../../services/calendar_sync_service.dart';
+import '../../services/client_service.dart';
 import '../../services/contract_pdf_service.dart';
 import '../../services/google_drive_sync_service.dart';
 
@@ -118,16 +120,7 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
 
       await prefs.setString(_contractsHistoryKey, jsonEncode(list));
 
-      // Sincronización automática en segundo plano con Google Drive (Offline-First)
-      GoogleDriveSyncService().enqueueAndSync(
-        clientName: widget.contract.businessName.isNotEmpty ? widget.contract.businessName : widget.contract.clientName,
-        documentType: 'Contrato',
-        folio: widget.contract.folio,
-        localFilePath: savedFile.path,
-        fileName: fileName,
-      );
-
-      // Actualizar contador del folio consecutivo
+      // Actualizar contador del folio consecutivo primero para que quede incluido en la Copia Maestra
       try {
         final parts = widget.contract.folio.split('-');
         if (parts.length >= 4) {
@@ -141,6 +134,27 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
         }
       } catch (_) {}
 
+      // Asegurar que el cliente exista en el directorio local antes de actualizar Copia Maestra
+      await ClientService().ensureClientExistsLocal(ClientModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        businessName: widget.contract.businessName.trim(),
+        contactName: widget.contract.clientName.trim(),
+        address: widget.contract.address.trim(),
+        phone: widget.contract.phone.trim(),
+        email: widget.contract.email.trim(),
+        facilityType: 'Comercial / Restaurante',
+        hasTraps: false,
+      ));
+
+      // Guardar PDF en Drive Y actualizar Copia Maestra automáticamente
+      final bool cloudMasterUpdated = await GoogleDriveSyncService().saveAndSyncMasterBackup(
+        clientName: widget.contract.businessName.isNotEmpty ? widget.contract.businessName : widget.contract.clientName,
+        documentType: 'Contrato',
+        folio: widget.contract.folio,
+        localFilePath: savedFile.path,
+        fileName: fileName,
+      );
+
       if (mounted) {
         setState(() {
           _isSaved = true;
@@ -148,13 +162,19 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
         });
         if (showSuccessSnackbar) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Colors.green,
+            SnackBar(
+              backgroundColor: cloudMasterUpdated ? Colors.green : Colors.orange.shade800,
               content: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text('Contrato guardado correctamente en tu historial.'),
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      cloudMasterUpdated
+                          ? 'Contrato guardado y Copia Maestra actualizada en Drive.'
+                          : 'Contrato guardado localmente (pendiente de conexión a Drive).',
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -334,6 +354,7 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
 
       list.insert(0, entry);
       await prefs.setString('ej_schedules_history_list', jsonEncode(list));
+      await GoogleDriveSyncService().saveAndSyncMasterBackup();
     } catch (e) {
       debugPrint('Error agendando visitas de contrato: $e');
     }
@@ -402,9 +423,15 @@ class _ContractPreviewScreenState extends State<ContractPreviewScreen> {
                   side: const BorderSide(color: Color(0xFF0F2B48), width: 1.5),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                icon: const Icon(Icons.save_alt, color: Color(0xFF0F2B48)),
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F2B48)),
+                      )
+                    : const Icon(Icons.save_alt, color: Color(0xFF0F2B48)),
                 label: Text(
-                  _isSaved ? 'Guardado' : 'Guardar',
+                  _isSaving ? 'Guardando...' : (_isSaved ? 'Guardado ✓' : 'Guardar'),
                   style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
                 ),
                 onPressed: _isSaving ? null : _saveContractToHistory,

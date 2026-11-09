@@ -32,6 +32,7 @@ class _TrapLayoutCanvasScreenState extends State<TrapLayoutCanvasScreen> {
 
   late TrapLayoutModel _layout;
   bool _isNew = true;
+  bool _isSaving = false;
   String _selectedTrapType = 'Cebadero Exterior';
 
   CanvasInteractionMode _currentMode = CanvasInteractionMode.placeTraps;
@@ -665,6 +666,8 @@ class _TrapLayoutCanvasScreenState extends State<TrapLayoutCanvasScreen> {
   // --- GUARDADO Y GENERACIÓN DE PDF ---
 
   Future<void> _saveLayout() async {
+    if (_isSaving) return;
+
     if (_activeWallPoints.length >= 3) {
       _closeActiveWall();
     }
@@ -674,31 +677,62 @@ class _TrapLayoutCanvasScreenState extends State<TrapLayoutCanvasScreen> {
       return;
     }
 
-    final success = await _layoutService.saveLayout(_layout);
-    if (success) {
-      // Sincronización automática en segundo plano con Google Drive (Offline-First)
-      try {
-        final pdfBytes = await TrapLayoutPdfService.generateLayoutPdf(_layout);
-        final tempDir = await getTemporaryDirectory();
-        final fileName = 'Plano_Layout_${_layout.folio.replaceAll("#", "")}.pdf';
-        final file = File('${tempDir.path}/$fileName');
-        await file.writeAsBytes(pdfBytes);
+    setState(() => _isSaving = true);
 
-        GoogleDriveSyncService().enqueueAndSync(
-          clientName: _layout.clientBusinessName,
-          documentType: 'Plano',
-          folio: _layout.folio,
-          localFilePath: file.path,
-          fileName: fileName,
-        );
-      } catch (_) {}
+    bool success = false;
+    bool cloudMasterUpdated = false;
+    try {
+      success = await _layoutService.saveLayout(_layout);
+      if (success) {
+        await _clientService.ensureClientExistsLocal(ClientModel(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          businessName: _layout.clientBusinessName.trim(),
+          contactName: _layout.clientContactName.trim(),
+          address: _layout.clientAddress.trim(),
+          phone: _layout.clientPhone.trim(),
+          email: '',
+          facilityType: 'Comercial / Restaurante',
+          hasTraps: false,
+        ));
+
+        try {
+          final pdfBytes = await TrapLayoutPdfService.generateLayoutPdf(_layout);
+          final tempDir = await getTemporaryDirectory();
+          final fileName = 'Plano_Layout_${_layout.folio.replaceAll("#", "")}.pdf';
+          final file = File('${tempDir.path}/$fileName');
+          await file.writeAsBytes(pdfBytes);
+
+          cloudMasterUpdated = await GoogleDriveSyncService().saveAndSyncMasterBackup(
+            clientName: _layout.clientBusinessName,
+            documentType: 'Plano',
+            folio: _layout.folio,
+            localFilePath: file.path,
+            fileName: fileName,
+          );
+        } catch (_) {
+          cloudMasterUpdated = await GoogleDriveSyncService().saveAndSyncMasterBackup();
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(success ? '¡Plano guardado exitosamente en tu app!' : 'Error al guardar el plano.'),
-          backgroundColor: success ? Colors.green.shade800 : Colors.red,
+          content: Text(
+            !success
+                ? 'Error al guardar el plano.'
+                : (cloudMasterUpdated
+                    ? '¡Plano guardado y Copia Maestra actualizada en Drive!'
+                    : '¡Plano guardado localmente! (Sin conexión a Drive en este momento)'),
+          ),
+          backgroundColor: !success
+              ? Colors.red
+              : (cloudMasterUpdated ? Colors.green.shade800 : Colors.orange.shade800),
+          duration: const Duration(seconds: 4),
         ),
       );
     }
@@ -895,7 +929,7 @@ class _TrapLayoutCanvasScreenState extends State<TrapLayoutCanvasScreen> {
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             tooltip: 'Generar PDF',
-            onPressed: _previewAndExportPdf,
+            onPressed: _isSaving ? null : _previewAndExportPdf,
           ),
         ],
       ),
@@ -1281,9 +1315,18 @@ class _TrapLayoutCanvasScreenState extends State<TrapLayoutCanvasScreen> {
                               side: const BorderSide(color: Color(0xFF0F2B48)),
                               padding: const EdgeInsets.symmetric(vertical: 10),
                             ),
-                            icon: const Icon(Icons.save_outlined, size: 18),
-                            label: const Text('Guardar Plano', style: TextStyle(fontWeight: FontWeight.bold)),
-                            onPressed: _saveLayout,
+                            icon: _isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F2B48)),
+                                  )
+                                : const Icon(Icons.save_outlined, size: 18),
+                            label: Text(
+                              _isSaving ? 'Guardando...' : 'Guardar Plano',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            onPressed: _isSaving ? null : _saveLayout,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1296,7 +1339,7 @@ class _TrapLayoutCanvasScreenState extends State<TrapLayoutCanvasScreen> {
                             ),
                             icon: const Icon(Icons.picture_as_pdf, size: 18),
                             label: const Text('Generar PDF Oficial', style: TextStyle(fontWeight: FontWeight.bold)),
-                            onPressed: _previewAndExportPdf,
+                            onPressed: _isSaving ? null : _previewAndExportPdf,
                           ),
                         ),
                       ],

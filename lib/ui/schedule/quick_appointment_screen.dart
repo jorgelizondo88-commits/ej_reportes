@@ -6,6 +6,7 @@ import '../../models/client_model.dart';
 import '../../models/schedule_model.dart';
 import '../../services/calendar_sync_service.dart';
 import '../../services/client_service.dart';
+import '../../services/google_drive_sync_service.dart';
 import '../../services/notification_service.dart';
 
 class QuickAppointmentScreen extends StatefulWidget {
@@ -152,11 +153,13 @@ class _QuickAppointmentScreenState extends State<QuickAppointmentScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
               onPressed: () async {
+                final messenger = ScaffoldMessenger.of(this.context);
                 Navigator.pop(context);
                 final granted = await NotificationService().requestPermission();
                 if (granted && mounted) {
                   await NotificationService().showTestNotification();
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  messenger.showSnackBar(
                     const SnackBar(
                       content: Text('¡Notificaciones activadas con éxito!'),
                       backgroundColor: Colors.green,
@@ -313,7 +316,7 @@ class _QuickAppointmentScreenState extends State<QuickAppointmentScreen> {
       final displayName = business.isNotEmpty ? business : contact;
       final timeStr = _formatTimeOfDay(_selectedTime);
 
-      // Guardar en Directorio de Clientes si está marcado y es nuevo
+      // Guardar en Directorio de Clientes si está marcado y es nuevo (la Copia Maestra se actualiza al finalizar la cita)
       if (_isNewClient && _saveToClientDirectory) {
         final newClient = ClientModel(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -325,7 +328,7 @@ class _QuickAppointmentScreenState extends State<QuickAppointmentScreen> {
           facilityType: _appointmentCategory.contains('Residencial') ? 'Residencial / Casa' : 'Comercial / Empresa',
           hasTraps: false,
         );
-        await _clientService.saveClient(newClient);
+        await _clientService.saveClient(newClient, syncMasterBackup: false);
       }
 
       // Descripción legible del patrón de recurrencia
@@ -467,6 +470,8 @@ class _QuickAppointmentScreenState extends State<QuickAppointmentScreen> {
       list.insert(0, scheduleEntry);
       await prefs.setString(_schedulesHistoryKey, jsonEncode(list));
 
+      final bool cloudMasterUpdated = await GoogleDriveSyncService().saveAndSyncMasterBackup();
+
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -477,16 +482,19 @@ class _QuickAppointmentScreenState extends State<QuickAppointmentScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _isRecurring
-                        ? '¡$totalVisits citas agendadas ($recurrenceDesc) y sincronizadas con Google Calendar!'
-                        : (_syncGoogleCalendar && generatedVisits.first.calendarEventId != null
-                            ? '¡Cita agendada y sincronizada con Google Calendar!'
-                            : '¡Cita guardada en tu Agenda exitosamente!'),
+                    (_isRecurring
+                            ? '¡$totalVisits citas agendadas ($recurrenceDesc)'
+                            : (_syncGoogleCalendar && generatedVisits.first.calendarEventId != null
+                                ? '¡Cita agendada en Calendar'
+                                : '¡Cita guardada en tu Agenda')) +
+                        (cloudMasterUpdated
+                            ? ' y Copia Maestra actualizada en Drive!'
+                            : ' (guardado local, pendiente conexión a Drive)!'),
                   ),
                 ),
               ],
             ),
-            backgroundColor: const Color(0xFF0F2B48),
+            backgroundColor: cloudMasterUpdated ? Colors.green.shade800 : Colors.orange.shade800,
             duration: const Duration(seconds: 4),
           ),
         );

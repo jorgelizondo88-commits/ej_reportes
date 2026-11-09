@@ -74,6 +74,9 @@ class _MainHubScreenState extends State<MainHubScreen> {
     }
 
     // Auto-sincronización bidireccional silenciosa en segundo plano con Google Drive
+    if (!GoogleDriveSyncService().isSignedIn) {
+      await GoogleDriveSyncService().initSilently();
+    }
     if (GoogleDriveSyncService().isSignedIn) {
       GoogleDriveSyncService().pullAndMergeCloudDatabase().then((merged) async {
         final discovered = await GoogleDriveSyncService().discoverDriveDocuments();
@@ -81,14 +84,22 @@ class _MainHubScreenState extends State<MainHubScreen> {
           final p = await SharedPreferences.getInstance();
           final rR = p.getString('ej_reports_history_list');
           final rQ = p.getString('ej_quotes_history_list');
+          final rS = p.getString('ej_schedules_history_list');
+          final rC = p.getString('ej_contracts_history_list');
           final cL = await ClientService().getSavedClients();
+          final lL = await TrapLayoutService().getAllLayouts();
           final repL = (rR != null && rR.isNotEmpty) ? jsonDecode(rR) : [];
           final quoL = (rQ != null && rQ.isNotEmpty) ? jsonDecode(rQ) : [];
+          final schL = (rS != null && rS.isNotEmpty) ? jsonDecode(rS) : [];
+          final conL = (rC != null && rC.isNotEmpty) ? jsonDecode(rC) : [];
           if (mounted) {
             setState(() {
               _clientCount = cL.length;
               _reportCount = repL.length;
               _quoteCount = quoL.length;
+              _scheduleCount = schL.length;
+              _contractCount = conL.length;
+              _layoutCount = lL.length;
             });
           }
         }
@@ -219,11 +230,12 @@ class _MainHubScreenState extends State<MainHubScreen> {
                   _loadMetrics();
                 },
                 secondaryButtonText: 'Historial de Reportes',
-                onSecondaryPressed: () {
-                  Navigator.push(
+                onSecondaryPressed: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const ReportHistoryScreen()),
                   );
+                  _loadMetrics();
                 },
               ),
               const SizedBox(height: 14),
@@ -245,11 +257,12 @@ class _MainHubScreenState extends State<MainHubScreen> {
                   _loadMetrics();
                 },
                 secondaryButtonText: 'Historial de Cotizaciones',
-                onSecondaryPressed: () {
-                  Navigator.push(
+                onSecondaryPressed: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const QuoteHistoryScreen()),
                   );
+                  _loadMetrics();
                 },
               ),
               const SizedBox(height: 14),

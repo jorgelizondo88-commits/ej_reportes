@@ -38,6 +38,7 @@ class ClientModel {
   final List<ClientTrapTemplate> defaultTraps; // Inventario fijo de trampas
   final String? driveFolderId;
   final String? driveFolderShareUrl; // Enlace público de solo lectura para el cliente
+  final DateTime? updatedAt;
 
   ClientModel({
     required this.id,
@@ -51,6 +52,7 @@ class ClientModel {
     this.defaultTraps = const [],
     this.driveFolderId,
     this.driveFolderShareUrl,
+    this.updatedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -66,6 +68,7 @@ class ClientModel {
       'defaultTraps': defaultTraps.map((t) => t.toMap()).toList(),
       'driveFolderId': driveFolderId,
       'driveFolderShareUrl': driveFolderShareUrl,
+      if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
     };
   }
 
@@ -86,6 +89,7 @@ class ClientModel {
           : [],
       driveFolderId: map['driveFolderId'],
       driveFolderShareUrl: map['driveFolderShareUrl'],
+      updatedAt: map['updatedAt'] != null ? DateTime.tryParse(map['updatedAt'].toString()) : null,
     );
   }
 
@@ -101,6 +105,7 @@ class ClientModel {
     List<ClientTrapTemplate>? defaultTraps,
     String? driveFolderId,
     String? driveFolderShareUrl,
+    DateTime? updatedAt,
   }) {
     return ClientModel(
       id: id ?? this.id,
@@ -114,6 +119,7 @@ class ClientModel {
       defaultTraps: defaultTraps ?? this.defaultTraps,
       driveFolderId: driveFolderId ?? this.driveFolderId,
       driveFolderShareUrl: driveFolderShareUrl ?? this.driveFolderShareUrl,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

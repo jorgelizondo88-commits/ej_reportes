@@ -27,14 +27,20 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
   void initState() {
     super.initState();
     _loadHistory();
-    // Auto-sincronizar en segundo plano al entrar
-    if (GoogleDriveSyncService().isSignedIn) {
-      GoogleDriveSyncService().pullAndMergeCloudDatabase().then((merged) async {
-        final discovered = await GoogleDriveSyncService().discoverDriveDocuments();
-        if ((merged || discovered > 0) && mounted) {
-          _loadHistory();
-        }
-      });
+    _syncReportsInBackground();
+  }
+
+  Future<void> _syncReportsInBackground() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (drive.isSignedIn) {
+      final merged = await drive.pullAndMergeCloudDatabase();
+      final discovered = await drive.discoverDriveDocuments();
+      if ((merged || discovered > 0) && mounted) {
+        _loadHistory();
+      }
     }
   }
 
@@ -134,7 +140,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     try {
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/$fileName');
-      await file!.copy(tempFile.path);
+      await file.copy(tempFile.path);
 
       await Share.shareXFiles(
         [XFile(tempFile.path, name: fileName)],
@@ -144,7 +150,7 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
     } catch (_) {
       // Si por alguna razón falla la copia temporal, compartimos el original
       await Share.shareXFiles(
-        [XFile(file!.path)],
+        [XFile(file.path)],
         text: 'Reporte de Servicio de Control de Plagas - Folio $folio',
         subject: 'Reporte de Servicio: ${clientTitle.isNotEmpty ? clientTitle : folio}',
       );
@@ -261,6 +267,19 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
 
   Future<void> _syncFromDrive() async {
     if (!mounted) return;
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (!drive.isSignedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Conecta Google Drive primero para sincronizar reportes.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Row(
@@ -273,8 +292,8 @@ class _ReportHistoryScreenState extends State<ReportHistoryScreen> {
         duration: Duration(seconds: 2),
       ),
     );
-    await GoogleDriveSyncService().pullAndMergeCloudDatabase();
-    await GoogleDriveSyncService().discoverDriveDocuments();
+    await drive.pullAndMergeCloudDatabase();
+    await drive.discoverDriveDocuments();
     await _loadHistory();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

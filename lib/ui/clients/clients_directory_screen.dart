@@ -25,6 +25,60 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
   void initState() {
     super.initState();
     _loadClients();
+    _syncClientsInBackground();
+  }
+
+  Future<void> _syncClientsInBackground() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (drive.isSignedIn) {
+      final changed = await drive.pullAndMergeCloudDatabase();
+      if (changed && mounted) {
+        _loadClients();
+      }
+    }
+  }
+
+  Future<void> _syncFromDrive() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (!drive.isSignedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Conecta Google Drive primero para sincronizar clientes.')),
+        );
+      }
+      return;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              SizedBox(width: 12),
+              Text('Sincronizando directorio con Google Drive...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+    await drive.pullAndMergeCloudDatabase();
+    await _loadClients();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Directorio de clientes actualizado!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _loadClients() async {
@@ -53,6 +107,10 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
   Future<void> _shareClientFolder(ClientModel client) async {
     final driveService = GoogleDriveSyncService();
     if (!driveService.isSignedIn) {
+      await driveService.initSilently();
+    }
+    if (!driveService.isSignedIn) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Para compartir la carpeta del cliente, conecta Google Drive primero.'),
@@ -72,6 +130,7 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
       return;
     }
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Generando enlace de solo lectura para el cliente...'),
@@ -153,10 +212,13 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
       'Hospitalario / Clínica',
     ];
 
+    bool isSaving = false;
+
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
             client != null ? 'Editar Cliente' : 'Nuevo Cliente',
@@ -168,27 +230,32 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
               children: [
                 TextField(
                   controller: businessCtrl,
+                  enabled: !isSaving,
                   decoration: const InputDecoration(labelText: 'Razón Social / Negocio *'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: contactCtrl,
+                  enabled: !isSaving,
                   decoration: const InputDecoration(labelText: 'Persona de Contacto'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: phoneCtrl,
+                  enabled: !isSaving,
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(labelText: 'Teléfono'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: addressCtrl,
+                  enabled: !isSaving,
                   decoration: const InputDecoration(labelText: 'Dirección'),
                 ),
                 const SizedBox(height: 10),
                 TextField(
                   controller: emailCtrl,
+                  enabled: !isSaving,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(labelText: 'Correo'),
                 ),
@@ -198,52 +265,79 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Giro / Instalación'),
                   items: facilityTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
-                  onChanged: (val) {
-                    if (val != null) setDialogState(() => facilityType = val);
-                  },
+                  onChanged: isSaving
+                      ? null
+                      : (val) {
+                          if (val != null) setDialogState(() => facilityType = val);
+                        },
                 ),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
               child: const Text('Cancelar'),
             ),
-            ElevatedButton(
+            ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0F2B48),
                 foregroundColor: Colors.white,
               ),
-              onPressed: () async {
-                final business = businessCtrl.text.trim();
-                final contact = contactCtrl.text.trim();
+              icon: isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.save, size: 18),
+              label: Text(isSaving ? 'Guardando...' : 'Guardar'),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      final business = businessCtrl.text.trim();
+                      final contact = contactCtrl.text.trim();
 
-                if (business.isEmpty && contact.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Ingresa al menos la razón social o el contacto.')),
-                  );
-                  return;
-                }
+                      if (business.isEmpty && contact.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Ingresa al menos la razón social o el contacto.')),
+                        );
+                        return;
+                      }
 
-                final saved = ClientModel(
-                  id: client?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                  businessName: business,
-                  contactName: contact,
-                  address: addressCtrl.text.trim(),
-                  phone: phoneCtrl.text.trim(),
-                  email: emailCtrl.text.trim(),
-                  facilityType: facilityType,
-                  hasTraps: client?.hasTraps ?? false,
-                  defaultTraps: client?.defaultTraps ?? [],
-                );
+                      setDialogState(() => isSaving = true);
 
-                await _clientService.saveClient(saved);
-                if (!mounted) return;
-                Navigator.pop(context);
-                _loadClients();
-              },
-              child: const Text('Guardar'),
+                      final saved = ClientModel(
+                        id: client?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+                        businessName: business,
+                        contactName: contact,
+                        address: addressCtrl.text.trim(),
+                        phone: phoneCtrl.text.trim(),
+                        email: emailCtrl.text.trim(),
+                        facilityType: facilityType,
+                        hasTraps: client?.hasTraps ?? false,
+                        defaultTraps: client?.defaultTraps ?? [],
+                      );
+
+                      final bool cloudOk = await _clientService.saveClient(saved);
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext);
+                      }
+                      if (!mounted) return;
+                      await _loadClients();
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            cloudOk
+                                ? '¡Cliente guardado y Copia Maestra actualizada en Drive!'
+                                : '¡Cliente guardado localmente! (Sin conexión a Drive en este momento)',
+                          ),
+                          backgroundColor: cloudOk ? Colors.green.shade800 : Colors.orange.shade800,
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+                    },
             ),
           ],
         ),
@@ -259,6 +353,11 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sincronizar con Google Drive',
+            onPressed: _syncFromDrive,
+          ),
           IconButton(
             icon: const Icon(Icons.person_add),
             tooltip: 'Nuevo Cliente',

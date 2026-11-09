@@ -637,8 +637,8 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
       return;
     }
 
-    // Guardar cliente en BD si se seleccionó la opción y es nuevo
-    if (_saveNewClientToDb && business.isNotEmpty) {
+    // Registrar cliente nuevo localmente sin sobreescribir inventarios de trampas existentes ni bloquear la vista previa
+    if (_saveNewClientToDb && (business.isNotEmpty || contact.isNotEmpty)) {
       final newClient = ClientModel(
         id: _selectedClient?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
         businessName: business,
@@ -649,7 +649,7 @@ class _QuoteFormScreenState extends State<QuoteFormScreen> {
         facilityType: _facilityType,
         hasTraps: false,
       );
-      await _clientService.saveClient(newClient);
+      await _clientService.ensureClientExistsLocal(newClient);
       _loadClients();
     }
 

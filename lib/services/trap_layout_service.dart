@@ -52,7 +52,20 @@ class TrapLayoutService {
       }
 
       final jsonList = currentList.map((item) => item.toJson()).toList();
-      return await prefs.setStringList(_layoutsKey, jsonList);
+      final saved = await prefs.setStringList(_layoutsKey, jsonList);
+
+      // Mantener sincronizado el contador consecutivo de folios de planos
+      final match = RegExp(r'(\d+)$').firstMatch(layout.folio);
+      if (match != null) {
+        final num = int.tryParse(match.group(1)!);
+        if (num != null) {
+          final current = prefs.getInt(_folioCounterKey) ?? 0;
+          if (num > current) {
+            await prefs.setInt(_folioCounterKey, num);
+          }
+        }
+      }
+      return saved;
     } catch (e) {
       debugPrint('Error guardando layout: $e');
       return false;
@@ -78,19 +91,17 @@ class TrapLayoutService {
   Future<String> generateNextFolio() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_layoutsKey);
+      final listJson = prefs.getStringList(_layoutsKey) ?? [];
       int maxNumber = 0;
-      if (raw != null && raw.isNotEmpty) {
+      for (final rawItem in listJson) {
         try {
-          final List<dynamic> list = jsonDecode(raw);
-          for (final item in list) {
-            final folioStr = (item['folio'] ?? '').toString();
-            final match = RegExp(r'(\d+)$').firstMatch(folioStr);
-            if (match != null) {
-              final num = int.tryParse(match.group(1)!);
-              if (num != null && num > maxNumber) {
-                maxNumber = num;
-              }
+          final decoded = jsonDecode(rawItem);
+          final folioStr = (decoded['folio'] ?? '').toString();
+          final match = RegExp(r'(\d+)$').firstMatch(folioStr);
+          if (match != null) {
+            final num = int.tryParse(match.group(1)!);
+            if (num != null && num > maxNumber) {
+              maxNumber = num;
             }
           }
         } catch (_) {}

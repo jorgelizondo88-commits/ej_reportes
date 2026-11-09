@@ -97,6 +97,8 @@ class GoogleDriveSyncService {
 
   final Map<String, String> _folderIdCache = {};
   final Map<String, Future<String>> _inFlightFolders = {};
+  final Set<String> _verifiedFolderKeysThisSession = {};
+  Future<void> _masterSyncLock = Future.value();
 
   // Inicialización y recuperación de sesión previa silenciosa
   Future<bool> initSilently() async {
@@ -171,23 +173,39 @@ class GoogleDriveSyncService {
     }
   }
 
+  bool _hasNonEmptyJsonArray(String? raw) {
+    if (raw == null || raw.isEmpty || raw == '[]') return false;
+    try {
+      final decoded = jsonDecode(raw);
+      return decoded is List && decoded.isNotEmpty;
+    } catch (_) {
+      return raw.isNotEmpty && raw != '[]';
+    }
+  }
+
+  bool _hasLocalDatabaseRecords(SharedPreferences prefs) {
+    return _hasNonEmptyJsonArray(prefs.getString('ej_saved_clients')) ||
+        _hasNonEmptyJsonArray(prefs.getString('ej_reports_history_list')) ||
+        _hasNonEmptyJsonArray(prefs.getString('ej_quotes_history_list')) ||
+        _hasNonEmptyJsonArray(prefs.getString('ej_contracts_history_list')) ||
+        _hasNonEmptyJsonArray(prefs.getString('ej_schedules_history_list')) ||
+        (prefs.getStringList('ej_client_trap_layouts_list')?.isNotEmpty ?? false);
+  }
+
   // Iniciar sesión con Google (Interactivo)
   Future<GoogleSignInAccount?> signIn() async {
     lastError = null;
     if (Platform.isWindows) {
       final ok = await _signInWindows();
       if (ok) {
-        processQueue();
+        await processQueue(updateMasterBackup: false);
         final prefs = await SharedPreferences.getInstance();
-        final rawClients = prefs.getString('ej_saved_clients_list');
-        final rawReports = prefs.getString('ej_reports_history_list');
-        final bool hasLocalData = (rawClients != null && rawClients.isNotEmpty && rawClients != '[]') ||
-            (rawReports != null && rawReports.isNotEmpty && rawReports != '[]');
-        if (!hasLocalData) {
+        if (!_hasLocalDatabaseRecords(prefs)) {
           debugPrint('Dispositivo sin datos locales. Auto-restaurando desde Google Drive...');
           await restoreDatabaseFromCloud();
         } else {
-          backupDatabaseToCloud();
+          await pullAndMergeCloudDatabase();
+          await backupDatabaseToCloud(force: true);
         }
       }
       return null;
@@ -197,17 +215,14 @@ class GoogleDriveSyncService {
       final account = await _googleSignIn.signIn();
       _currentUser = account;
       if (account != null) {
-        processQueue();
+        await processQueue(updateMasterBackup: false);
         final prefs = await SharedPreferences.getInstance();
-        final rawClients = prefs.getString('ej_saved_clients_list');
-        final rawReports = prefs.getString('ej_reports_history_list');
-        final bool hasLocalData = (rawClients != null && rawClients.isNotEmpty && rawClients != '[]') ||
-            (rawReports != null && rawReports.isNotEmpty && rawReports != '[]');
-        if (!hasLocalData) {
+        if (!_hasLocalDatabaseRecords(prefs)) {
           debugPrint('Dispositivo sin datos locales. Auto-restaurando desde Google Drive...');
           await restoreDatabaseFromCloud();
         } else {
-          backupDatabaseToCloud();
+          await pullAndMergeCloudDatabase();
+          await backupDatabaseToCloud(force: true);
         }
       } else {
         lastError = 'La ventana de selección se cerró sin seleccionar una cuenta.';
@@ -345,6 +360,7 @@ class GoogleDriveSyncService {
         _currentUser = null;
       }
       _folderIdCache.clear();
+      _verifiedFolderKeysThisSession.clear();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_folderCacheKey);
     } catch (e) {
@@ -365,16 +381,13 @@ class GoogleDriveSyncService {
       final account = await _googleSignIn.signIn();
       _currentUser = account;
       if (account != null) {
-        processQueue();
+        await processQueue(updateMasterBackup: false);
         final prefs = await SharedPreferences.getInstance();
-        final rawClients = prefs.getString('ej_saved_clients_list');
-        final rawReports = prefs.getString('ej_reports_history_list');
-        final bool hasLocalData = (rawClients != null && rawClients.isNotEmpty && rawClients != '[]') ||
-            (rawReports != null && rawReports.isNotEmpty && rawReports != '[]');
-        if (!hasLocalData) {
+        if (!_hasLocalDatabaseRecords(prefs)) {
           await restoreDatabaseFromCloud();
         } else {
-          backupDatabaseToCloud();
+          await pullAndMergeCloudDatabase();
+          await backupDatabaseToCloud(force: true);
         }
       }
       return account;
@@ -454,9 +467,16 @@ class GoogleDriveSyncService {
     final cacheKey = '${parentId ?? "root"}_$folderName';
     if (_folderIdCache.containsKey(cacheKey)) {
       final cachedId = _folderIdCache[cacheKey]!;
-      try {
-        await api.files.get(cachedId, $fields: 'id, trashed');
+      if (_verifiedFolderKeysThisSession.contains(cacheKey)) {
         return cachedId;
+      }
+      try {
+        final meta = await api.files.get(cachedId, $fields: 'id, trashed') as drive.File;
+        if (meta.trashed != true) {
+          _verifiedFolderKeysThisSession.add(cacheKey);
+          return cachedId;
+        }
+        _folderIdCache.remove(cacheKey);
       } catch (_) {
         _folderIdCache.remove(cacheKey);
       }
@@ -474,7 +494,8 @@ class GoogleDriveSyncService {
       if (searchResult.files != null && searchResult.files!.isNotEmpty) {
         final existingId = searchResult.files!.first.id!;
         _folderIdCache[cacheKey] = existingId;
-        _saveFolderCache();
+        _verifiedFolderKeysThisSession.add(cacheKey);
+        await _saveFolderCache();
         return existingId;
       }
     } catch (e) {
@@ -493,7 +514,8 @@ class GoogleDriveSyncService {
     final created = await api.files.create(folderMetadata, $fields: 'id, name');
     final newId = created.id!;
     _folderIdCache[cacheKey] = newId;
-    _saveFolderCache();
+    _verifiedFolderKeysThisSession.add(cacheKey);
+    await _saveFolderCache();
     return newId;
   }
 
@@ -680,7 +702,10 @@ class GoogleDriveSyncService {
         // Actualizar el cliente en el ClientService
         final clientService = ClientService();
         final clients = await clientService.getSavedClients();
-        final idx = clients.indexWhere((c) => c.businessName.trim().toLowerCase() == clientName.trim().toLowerCase());
+        final normName = clientName.trim().toLowerCase();
+        final idx = clients.indexWhere((c) =>
+            c.businessName.trim().toLowerCase() == normName ||
+            (c.businessName.trim().isEmpty && c.contactName.trim().toLowerCase() == normName));
         if (idx >= 0) {
           final updated = clients[idx].copyWith(
             driveFolderId: clientFolderId,
@@ -753,8 +778,18 @@ class GoogleDriveSyncService {
         );
       }
 
-      // Si el cliente no tiene enlace público guardado, generarlo en segundo plano
-      getOrCreateClientFolderShareLink(clientName);
+      // Solo generar enlace público si aún no está guardado localmente (evita llamadas extra y carreras con SharedPreferences)
+      try {
+        final clients = await ClientService().getSavedClients();
+        final normClient = clientName.trim().toLowerCase();
+        final matchIdx = clients.indexWhere(
+          (c) => c.businessName.trim().toLowerCase() == normClient || c.contactName.trim().toLowerCase() == normClient,
+        );
+        final hasShareLink = matchIdx >= 0 && (clients[matchIdx].driveFolderShareUrl?.isNotEmpty ?? false);
+        if (!hasShareLink) {
+          await getOrCreateClientFolderShareLink(clientName);
+        }
+      } catch (_) {}
 
       return uploaded.webViewLink;
     } catch (e) {
@@ -821,9 +856,9 @@ class GoogleDriveSyncService {
   }
 
   // Procesar cola en segundo plano
-  Future<void> processQueue() async {
+  Future<bool> processQueue({bool updateMasterBackup = true}) async {
     final api = await _getDriveApi();
-    if (api == null) return;
+    if (api == null) return false;
 
     final queue = await getQueue();
     final pendingItems = queue.where((q) => q.status == 'pending' || q.status == 'error').toList();
@@ -866,8 +901,81 @@ class GoogleDriveSyncService {
     }
 
     // Si se subió algún archivo, actualizar automáticamente el respaldo maestro en Drive
-    if (pendingItems.any((i) => i.status == 'synced')) {
-      await backupDatabaseToCloud(force: true);
+    if (updateMasterBackup && pendingItems.any((i) => i.status == 'synced')) {
+      return await backupDatabaseToCloud(force: true);
+    }
+    return pendingItems.any((i) => i.status == 'synced');
+  }
+
+  /// Sube el documento PDF (si se provee) Y actualiza inmediatamente la Copia Maestra en Google Drive.
+  /// Garantiza que la nube tenga tanto los cambios previos de otros dispositivos (merge) como el nuevo documento.
+  Future<bool> saveAndSyncMasterBackup({
+    String? clientName,
+    String? documentType,
+    String? folio,
+    String? localFilePath,
+    String? fileName,
+  }) async {
+    final prev = _masterSyncLock;
+    bool result = false;
+
+    final next = prev.catchError((_) {}).then((_) async {
+      result = await _performSaveAndSyncMasterBackup(
+        clientName: clientName,
+        documentType: documentType,
+        folio: folio,
+        localFilePath: localFilePath,
+        fileName: fileName,
+      );
+    });
+
+    _masterSyncLock = next;
+    await next;
+    return result;
+  }
+
+  Future<bool> _performSaveAndSyncMasterBackup({
+    String? clientName,
+    String? documentType,
+    String? folio,
+    String? localFilePath,
+    String? fileName,
+  }) async {
+    try {
+      final hasFile = clientName != null &&
+          documentType != null &&
+          folio != null &&
+          localFilePath != null &&
+          fileName != null;
+
+      if (hasFile) {
+        await _enqueueItem(CloudSyncItemModel(
+          id: 'sync_${DateTime.now().millisecondsSinceEpoch}',
+          clientName: clientName,
+          documentType: documentType,
+          folio: folio,
+          fileName: fileName,
+          localFilePath: localFilePath,
+          status: 'pending',
+          createdAt: DateTime.now(),
+        ));
+      }
+
+      return await () async {
+        final api = await _getDriveApi();
+        if (api == null) return false;
+
+        await processQueue(updateMasterBackup: false);
+
+        // Antes de subir el respaldo maestro, fusionar cualquier novedad de la nube para no perder trabajo de otros equipos
+        await pullAndMergeCloudDatabase();
+
+        // Subir Copia Maestra actualizada
+        return await backupDatabaseToCloud(force: true);
+      }().timeout(const Duration(seconds: 35));
+    } catch (e) {
+      debugPrint('Error en saveAndSyncMasterBackup: $e');
+      return false;
     }
   }
 
@@ -879,24 +987,9 @@ class GoogleDriveSyncService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final rawClients = prefs.getString('ej_saved_clients_list');
-      final rawReports = prefs.getString('ej_reports_history_list');
-      final rawQuotes = prefs.getString('ej_quotes_history_list');
-      final rawContracts = prefs.getString('ej_contracts_history_list');
-
-      int count(String? raw) {
-        if (raw == null || raw.isEmpty || raw == '[]') return 0;
-        try {
-          final d = jsonDecode(raw);
-          if (d is List) return d.length;
-        } catch (_) {}
-        return 0;
-      }
-
-      final int localCount = count(rawClients) + count(rawReports) + count(rawQuotes) + count(rawContracts);
 
       // Si el dispositivo local está vacío y no se está forzando, NO sobreescribir la nube para proteger el respaldo
-      if (localCount == 0 && !force) {
+      if (!_hasLocalDatabaseRecords(prefs) && !force) {
         debugPrint('backupDatabaseToCloud omitido: este dispositivo está vacío y no debe sobreescribir la nube.');
         return false;
       }
@@ -910,8 +1003,16 @@ class GoogleDriveSyncService {
       final Map<String, dynamic> snapshot = {};
 
       for (final key in allKeys) {
-        // Excluir claves de caché temporal
-        if (key == _folderCacheKey) continue;
+        // Excluir claves locales de dispositivo o caché
+        if (key == _folderCacheKey ||
+            key == _queueStorageKey ||
+            key == _windowsAccessTokenKey ||
+            key == _windowsRefreshTokenKey ||
+            key == _windowsTokenExpiryKey ||
+            key == _windowsUserEmailKey ||
+            key == _windowsUserNameKey) {
+          continue;
+        }
         final val = prefs.get(key);
         snapshot[key] = val;
       }
@@ -1026,14 +1127,16 @@ class GoogleDriveSyncService {
         return 0;
       }
 
-      int clients = countItems(data?['ej_saved_clients_list']);
+      int clients = countItems(data?['ej_saved_clients'] ?? data?['ej_saved_clients_list']);
       int reports = countItems(data?['ej_reports_history_list']);
       int quotes = countItems(data?['ej_quotes_history_list']);
       int contracts = countItems(data?['ej_contracts_history_list']);
+      int schedules = countItems(data?['ej_schedules_history_list']);
+      int layouts = countItems(data?['ej_client_trap_layouts_list']);
 
       // Si la versión actual está vacía (ej. si el Mac sin datos la sobreescribió al conectar),
       // buscar automáticamente en el historial de revisiones de Google Drive
-      if (clients == 0 && reports == 0 && quotes == 0) {
+      if (clients == 0 && reports == 0 && quotes == 0 && contracts == 0 && schedules == 0 && layouts == 0) {
         try {
           final revs = await api.revisions.list(fileId);
           if (revs.revisions != null && revs.revisions!.isNotEmpty) {
@@ -1047,17 +1150,21 @@ class GoogleDriveSyncService {
                 ) as drive.Media;
 
                 final revData = await downloadAndParse(revMedia);
-                final c = countItems(revData?['ej_saved_clients_list']);
+                final c = countItems(revData?['ej_saved_clients'] ?? revData?['ej_saved_clients_list']);
                 final r = countItems(revData?['ej_reports_history_list']);
                 final q = countItems(revData?['ej_quotes_history_list']);
                 final k = countItems(revData?['ej_contracts_history_list']);
+                final s = countItems(revData?['ej_schedules_history_list']);
+                final l = countItems(revData?['ej_client_trap_layouts_list']);
 
-                if (c > 0 || r > 0 || q > 0) {
+                if (c > 0 || r > 0 || q > 0 || k > 0 || s > 0 || l > 0) {
                   data = revData;
                   clients = c;
                   reports = r;
                   quotes = q;
                   contracts = k;
+                  schedules = s;
+                  layouts = l;
                   debugPrint('¡Recuperada versión previa con $c clientes y $r reportes!');
                   break;
                 }
@@ -1069,7 +1176,7 @@ class GoogleDriveSyncService {
         }
       }
 
-      if (data == null || (clients == 0 && reports == 0 && quotes == 0 && contracts == 0)) {
+      if (data == null || (clients == 0 && reports == 0 && quotes == 0 && contracts == 0 && schedules == 0 && layouts == 0)) {
         return const DatabaseRestoreResult(
           success: false,
           message: 'El archivo de respaldo en tu Drive aún no contiene clientes ni reportes.\n\nPor favor ve a tu teléfono (donde tienes tus datos), abre la app en "Nube Google Drive" y pulsa "Respaldar Base de Datos Maestra".',
@@ -1080,6 +1187,17 @@ class GoogleDriveSyncService {
       for (final entry in data.entries) {
         final key = entry.key;
         final val = entry.value;
+
+        // No sobreescribir claves exclusivas de sesión local o caché de este dispositivo
+        if (key == _folderCacheKey ||
+            key == _queueStorageKey ||
+            key == _windowsAccessTokenKey ||
+            key == _windowsRefreshTokenKey ||
+            key == _windowsTokenExpiryKey ||
+            key == _windowsUserEmailKey ||
+            key == _windowsUserNameKey) {
+          continue;
+        }
 
         if (val is String) {
           await prefs.setString(key, val);
@@ -1094,9 +1212,14 @@ class GoogleDriveSyncService {
         }
       }
 
+      // Compatibilidad con respaldos legados que usaban 'ej_saved_clients_list'
+      if (!data.containsKey('ej_saved_clients') && data['ej_saved_clients_list'] is String) {
+        await prefs.setString('ej_saved_clients', data['ej_saved_clients_list'] as String);
+      }
+
       return DatabaseRestoreResult(
         success: true,
-        message: '¡Datos restaurados con éxito!\n\n• $clients Clientes\n• $reports Reportes de servicio\n• $quotes Cotizaciones\n• $contracts Pólizas y Contratos',
+        message: '¡Datos restaurados con éxito!\n\n• $clients Clientes\n• $reports Reportes de servicio\n• $quotes Cotizaciones\n• $contracts Pólizas y Contratos\n• $schedules Agendas / Cronogramas\n• $layouts Planos / Layouts',
         clientsCount: clients,
         reportsCount: reports,
         quotesCount: quotes,
@@ -1174,7 +1297,7 @@ class GoogleDriveSyncService {
         return 0;
       }
 
-      int cloudClients = countItems(cloudData?['ej_saved_clients_list']);
+      int cloudClients = countItems(cloudData?['ej_saved_clients'] ?? cloudData?['ej_saved_clients_list']);
       int cloudReports = countItems(cloudData?['ej_reports_history_list']);
       int cloudQuotes = countItems(cloudData?['ej_quotes_history_list']);
 
@@ -1191,7 +1314,7 @@ class GoogleDriveSyncService {
                   downloadOptions: drive.DownloadOptions.fullMedia,
                 ) as drive.Media;
                 final revData = await downloadAndParse(revMedia);
-                if (countItems(revData?['ej_saved_clients_list']) > 0 ||
+                if (countItems(revData?['ej_saved_clients'] ?? revData?['ej_saved_clients_list']) > 0 ||
                     countItems(revData?['ej_reports_history_list']) > 0 ||
                     countItems(revData?['ej_quotes_history_list']) > 0) {
                   cloudData = revData;
@@ -1206,73 +1329,105 @@ class GoogleDriveSyncService {
       if (cloudData == null) return false;
 
       final prefs = await SharedPreferences.getInstance();
+      bool changed = false;
 
       // 1. Fusionar Cotizaciones
-      _mergeJsonLists(
+      if (await _mergeJsonLists(
         prefs: prefs,
         key: 'ej_quotes_history_list',
         cloudRaw: cloudData['ej_quotes_history_list'],
         uniqueKey: 'folio',
-      );
+      )) {
+        changed = true;
+      }
 
       // 2. Fusionar Reportes
-      _mergeJsonLists(
+      if (await _mergeJsonLists(
         prefs: prefs,
         key: 'ej_reports_history_list',
         cloudRaw: cloudData['ej_reports_history_list'],
         uniqueKey: 'folio',
-      );
+      )) {
+        changed = true;
+      }
 
       // 3. Fusionar Contratos
-      _mergeJsonLists(
+      if (await _mergeJsonLists(
         prefs: prefs,
         key: 'ej_contracts_history_list',
         cloudRaw: cloudData['ej_contracts_history_list'],
         uniqueKey: 'folio',
-      );
+      )) {
+        changed = true;
+      }
 
       // 4. Fusionar Clientes
-      _mergeClientsList(
+      if (await _mergeClientsList(
         prefs: prefs,
-        cloudRaw: cloudData['ej_saved_clients_list'],
-      );
+        cloudRaw: cloudData['ej_saved_clients'] ?? cloudData['ej_saved_clients_list'],
+      )) {
+        changed = true;
+      }
 
-      // 5. Fusionar Cronogramas
-      _mergeJsonLists(
+      // 5. Fusionar Cronogramas y Agenda
+      if (await _mergeJsonLists(
         prefs: prefs,
         key: 'ej_schedules_history_list',
         cloudRaw: cloudData['ej_schedules_history_list'],
         uniqueKey: 'folio',
-      );
+      )) {
+        changed = true;
+      }
 
-      // 6. Fusionar contadores de folios para que el siguiente número sea siempre el más alto
+      // 6. Fusionar Planos de Trampas (StringList)
+      if (await _mergeTrapLayoutsList(
+        prefs: prefs,
+        cloudRaw: cloudData['ej_client_trap_layouts_list'],
+      )) {
+        changed = true;
+      }
+
+      // 7. Fusionar contadores de folios para que el siguiente número sea siempre el más alto
       for (final counterKey in [
         'ej_consecutive_quote_counter',
         'ej_consecutive_folio_counter',
         'ej_consecutive_schedule_counter',
         'ej_contracts_folio_counter',
         'ej_layout_folio_counter',
+        'ej_quick_appointment_folio_counter',
       ]) {
         final localVal = prefs.getInt(counterKey) ?? 0;
         final cloudVal = (cloudData[counterKey] is int) ? (cloudData[counterKey] as int) : 0;
         if (cloudVal > localVal) {
           await prefs.setInt(counterKey, cloudVal);
+          changed = true;
         }
       }
 
-      return true;
+      return changed;
     } catch (e) {
       debugPrint('Error en pullAndMergeCloudDatabase: $e');
       return false;
     }
   }
 
-  void _mergeJsonLists({
+  String _extractTimestamp(Map item) {
+    return (item['updatedAt'] ??
+            item['savedAt'] ??
+            item['createdAt'] ??
+            item['creationDate'] ??
+            item['serviceDate'] ??
+            item['quoteDate'] ??
+            '')
+        .toString();
+  }
+
+  Future<bool> _mergeJsonLists({
     required SharedPreferences prefs,
     required String key,
     required dynamic cloudRaw,
     required String uniqueKey,
-  }) {
+  }) async {
     try {
       final localRaw = prefs.getString(key);
       List<dynamic> localList = localRaw != null && localRaw.isNotEmpty ? jsonDecode(localRaw) : [];
@@ -1282,6 +1437,7 @@ class GoogleDriveSyncService {
       } else if (cloudRaw is List) {
         cloudList = cloudRaw;
       }
+      if (cloudList.isEmpty) return false;
 
       final Map<String, Map<String, dynamic>> map = {};
 
@@ -1299,9 +1455,28 @@ class GoogleDriveSyncService {
             if (!map.containsKey(u)) {
               map[u] = Map<String, dynamic>.from(item);
             } else {
-              final localPath = item['filePath'] as String?;
-              if (localPath != null && localPath.isNotEmpty && File(localPath).existsSync()) {
-                map[u]!['filePath'] = localPath;
+              final cloudSaved = _extractTimestamp(map[u]!);
+              final localSaved = _extractTimestamp(item);
+              final localFilePath = item['filePath'] as String?;
+              final localPdfPath = item['pdfPath'] as String?;
+
+              if (localSaved.compareTo(cloudSaved) >= 0) {
+                final existingCloudFilePath = map[u]!['filePath'];
+                final existingCloudPdfPath = map[u]!['pdfPath'];
+                map[u] = Map<String, dynamic>.from(item);
+                if ((localFilePath == null || localFilePath.isEmpty) && existingCloudFilePath != null) {
+                  map[u]!['filePath'] = existingCloudFilePath;
+                }
+                if ((localPdfPath == null || localPdfPath.isEmpty) && existingCloudPdfPath != null) {
+                  map[u]!['pdfPath'] = existingCloudPdfPath;
+                }
+              } else {
+                if (localFilePath != null && localFilePath.isNotEmpty && File(localFilePath).existsSync()) {
+                  map[u]!['filePath'] = localFilePath;
+                }
+                if (localPdfPath != null && localPdfPath.isNotEmpty && File(localPdfPath).existsSync()) {
+                  map[u]!['pdfPath'] = localPdfPath;
+                }
               }
             }
           }
@@ -1309,22 +1484,30 @@ class GoogleDriveSyncService {
       }
 
       final merged = map.values.toList()
-        ..sort((a, b) => (b['savedAt'] ?? b['serviceDate'] ?? b['quoteDate'] ?? '')
-            .toString()
-            .compareTo((a['savedAt'] ?? a['serviceDate'] ?? a['quoteDate'] ?? '').toString()));
+        ..sort((a, b) => _extractTimestamp(b).compareTo(_extractTimestamp(a)));
 
-      prefs.setString(key, jsonEncode(merged));
+      final encoded = jsonEncode(merged);
+      if (encoded == (localRaw ?? '')) return false;
+      await prefs.setString(key, encoded);
+      return true;
     } catch (e) {
       debugPrint('Error fusionando lista $key: $e');
+      return false;
     }
   }
 
-  void _mergeClientsList({
+  String _extractClientKey(Map c) {
+    final bn = (c['businessName'] ?? '').toString().trim();
+    final cn = (c['contactName'] ?? '').toString().trim();
+    return (bn.isNotEmpty ? bn : cn).toLowerCase();
+  }
+
+  Future<bool> _mergeClientsList({
     required SharedPreferences prefs,
     required dynamic cloudRaw,
-  }) {
+  }) async {
     try {
-      final localRaw = prefs.getString('ej_saved_clients_list');
+      final localRaw = prefs.getString('ej_saved_clients');
       List<dynamic> localList = localRaw != null && localRaw.isNotEmpty ? jsonDecode(localRaw) : [];
       List<dynamic> cloudList = [];
       if (cloudRaw is String && cloudRaw.isNotEmpty) {
@@ -1332,35 +1515,120 @@ class GoogleDriveSyncService {
       } else if (cloudRaw is List) {
         cloudList = cloudRaw;
       }
+      if (cloudList.isEmpty) return false;
 
       final Map<String, Map<String, dynamic>> map = {};
 
       for (final c in cloudList) {
         if (c is Map) {
-          final name = (c['businessName'] ?? c['contactName'] ?? '').toString().trim().toLowerCase();
-          final phone = (c['phone'] ?? '').toString().trim();
-          final key = '$name-$phone';
-          if (key.isNotEmpty && key != '-') map[key] = Map<String, dynamic>.from(c);
+          final key = _extractClientKey(c);
+          if (key.isNotEmpty) map[key] = Map<String, dynamic>.from(c);
         }
       }
 
       for (final c in localList) {
         if (c is Map) {
-          final name = (c['businessName'] ?? c['contactName'] ?? '').toString().trim().toLowerCase();
-          final phone = (c['phone'] ?? '').toString().trim();
-          final key = '$name-$phone';
-          if (key.isNotEmpty && key != '-') {
+          final key = _extractClientKey(c);
+          if (key.isNotEmpty) {
             if (!map.containsKey(key)) {
               map[key] = Map<String, dynamic>.from(c);
+            } else {
+              final cloudUpdated = (map[key]!['updatedAt'] ?? '').toString();
+              final localUpdated = (c['updatedAt'] ?? '').toString();
+              final cloudShareUrl = map[key]!['driveFolderShareUrl'];
+              final cloudFolderId = map[key]!['driveFolderId'];
+              final localShareUrl = c['driveFolderShareUrl'];
+              final localFolderId = c['driveFolderId'];
+
+              final bool localWins = localUpdated.isNotEmpty
+                  ? (cloudUpdated.isEmpty || localUpdated.compareTo(cloudUpdated) >= 0)
+                  : ((c['defaultTraps'] is List ? (c['defaultTraps'] as List).length : 0) >=
+                      (map[key]!['defaultTraps'] is List ? (map[key]!['defaultTraps'] as List).length : 0));
+
+              if (localWins) {
+                map[key] = Map<String, dynamic>.from(c);
+                if ((map[key]!['driveFolderShareUrl'] ?? '').toString().isEmpty && cloudShareUrl != null) {
+                  map[key]!['driveFolderShareUrl'] = cloudShareUrl;
+                }
+                if ((map[key]!['driveFolderId'] ?? '').toString().isEmpty && cloudFolderId != null) {
+                  map[key]!['driveFolderId'] = cloudFolderId;
+                }
+              } else {
+                if ((map[key]!['driveFolderShareUrl'] ?? '').toString().isEmpty && localShareUrl != null) {
+                  map[key]!['driveFolderShareUrl'] = localShareUrl;
+                }
+                if ((map[key]!['driveFolderId'] ?? '').toString().isEmpty && localFolderId != null) {
+                  map[key]!['driveFolderId'] = localFolderId;
+                }
+              }
             }
           }
         }
       }
 
       final merged = map.values.toList();
-      prefs.setString('ej_saved_clients_list', jsonEncode(merged));
+      final encoded = jsonEncode(merged);
+      if (encoded == (localRaw ?? '')) return false;
+      await prefs.setString('ej_saved_clients', encoded);
+      return true;
     } catch (e) {
       debugPrint('Error fusionando clientes: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _mergeTrapLayoutsList({
+    required SharedPreferences prefs,
+    required dynamic cloudRaw,
+  }) async {
+    try {
+      final localList = prefs.getStringList('ej_client_trap_layouts_list') ?? [];
+      List<String> cloudList = [];
+      if (cloudRaw is List) {
+        cloudList = cloudRaw.map((e) => e.toString()).toList();
+      } else if (cloudRaw is String && cloudRaw.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(cloudRaw);
+          if (decoded is List) {
+            cloudList = decoded.map((e) => e is String ? e : jsonEncode(e)).toList();
+          }
+        } catch (_) {}
+      }
+      if (cloudList.isEmpty) return false;
+
+      final Map<String, Map<String, dynamic>> map = {};
+      for (final raw in cloudList) {
+        try {
+          final m = jsonDecode(raw) as Map<String, dynamic>;
+          final id = (m['id'] ?? m['folio'] ?? '').toString();
+          if (id.isNotEmpty) map[id] = m;
+        } catch (_) {}
+      }
+      for (final raw in localList) {
+        try {
+          final m = jsonDecode(raw) as Map<String, dynamic>;
+          final id = (m['id'] ?? m['folio'] ?? '').toString();
+          if (id.isNotEmpty) {
+            if (!map.containsKey(id)) {
+              map[id] = m;
+            } else {
+              final cDate = (map[id]!['updatedAt'] ?? '').toString();
+              final lDate = (m['updatedAt'] ?? '').toString();
+              if (lDate.compareTo(cDate) >= 0) {
+                map[id] = m;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      final merged = map.values.map((m) => jsonEncode(m)).toList();
+      if (listEquals(merged, localList)) return false;
+      await prefs.setStringList('ej_client_trap_layouts_list', merged);
+      return true;
+    } catch (e) {
+      debugPrint('Error fusionando planos: $e');
+      return false;
     }
   }
 
@@ -1839,6 +2107,7 @@ class GoogleDriveSyncService {
 
       // Limpiar caché de IDs de carpetas para actualizar referencias
       _folderIdCache.clear();
+      _verifiedFolderKeysThisSession.clear();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_folderCacheKey);
 

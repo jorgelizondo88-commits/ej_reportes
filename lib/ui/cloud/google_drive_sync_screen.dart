@@ -43,13 +43,15 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
     final account = await _driveService.signIn();
     setState(() => _isLoading = false);
 
-    if (account != null && mounted) {
+    if ((_driveService.isSignedIn || account != null) && mounted) {
+      final email = _driveService.userEmail ?? account?.email ?? 'Google Drive';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('¡Conectado exitosamente con ${account.email}!'),
+          content: Text('¡Conectado exitosamente con $email!'),
           backgroundColor: Colors.green.shade800,
         ),
       );
+      widget.onDataRestored?.call();
       _checkStatusAndLoadQueue();
     } else if (mounted) {
       final err = _driveService.lastError ?? 'No se pudo completar el inicio de sesión.';

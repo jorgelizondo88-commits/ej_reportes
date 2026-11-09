@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/schedule_model.dart';
 import '../../services/calendar_sync_service.dart';
+import '../../services/google_drive_sync_service.dart';
 import '../../services/launcher_service.dart';
 import '../../services/notification_service.dart';
 import 'quick_appointment_screen.dart';
@@ -51,6 +52,20 @@ class _ScheduleHistoryScreenState extends State<ScheduleHistoryScreen> with Sing
     _focusedMonth = DateTime(now.year, now.month, 1);
     _selectedDay = DateTime(now.year, now.month, now.day);
     _loadSchedules();
+    _syncSchedulesInBackground();
+  }
+
+  Future<void> _syncSchedulesInBackground() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (drive.isSignedIn) {
+      final merged = await drive.pullAndMergeCloudDatabase();
+      if (merged && mounted) {
+        _loadSchedules();
+      }
+    }
   }
 
   @override
@@ -109,9 +124,12 @@ class _ScheduleHistoryScreenState extends State<ScheduleHistoryScreen> with Sing
     if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<void> _saveSchedulesList() async {
+  Future<void> _saveSchedulesList({bool syncToCloud = true}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_schedulesHistoryKey, jsonEncode(_schedules));
+    if (syncToCloud) {
+      await GoogleDriveSyncService().saveAndSyncMasterBackup();
+    }
   }
 
   /// Recopila ÚNICAMENTE las visitas que el usuario decidió incluir en su agenda
@@ -645,7 +663,7 @@ class _ScheduleHistoryScreenState extends State<ScheduleHistoryScreen> with Sing
         }
       });
 
-      await _saveSchedulesList();
+      await _saveSchedulesList(syncToCloud: false);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -725,7 +743,7 @@ Le confirmamos su servicio programado:
       setState(() {
         _schedules.removeAt(index);
       });
-      await _saveSchedulesList();
+      await _saveSchedulesList(syncToCloud: false);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -782,17 +800,20 @@ Le confirmamos su servicio programado:
             icon: const Icon(Icons.notifications_active_outlined),
             tooltip: 'Probar / Permisos de Notificaciones',
             onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
               final granted = await NotificationService().requestPermission();
-              if (granted && mounted) {
+              if (!context.mounted) return;
+              if (granted) {
                 await NotificationService().showTestNotification();
-                ScaffoldMessenger.of(context).showSnackBar(
+                if (!context.mounted) return;
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text('¡Notificación de prueba enviada con el logo de EJ Exterminadores!'),
                     backgroundColor: Colors.green,
                   ),
                 );
-              } else if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+              } else {
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Por favor permite las notificaciones en la ventana emergente o en Ajustes.'),
                     backgroundColor: Colors.orange,

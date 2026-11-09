@@ -27,14 +27,20 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
   void initState() {
     super.initState();
     _loadHistory();
-    // Auto-sincronizar en segundo plano al entrar
-    if (GoogleDriveSyncService().isSignedIn) {
-      GoogleDriveSyncService().pullAndMergeCloudDatabase().then((merged) async {
-        final discovered = await GoogleDriveSyncService().discoverDriveDocuments();
-        if ((merged || discovered > 0) && mounted) {
-          _loadHistory();
-        }
-      });
+    _syncQuotesInBackground();
+  }
+
+  Future<void> _syncQuotesInBackground() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (drive.isSignedIn) {
+      final merged = await drive.pullAndMergeCloudDatabase();
+      final discovered = await drive.discoverDriveDocuments();
+      if ((merged || discovered > 0) && mounted) {
+        _loadHistory();
+      }
     }
   }
 
@@ -134,7 +140,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
     try {
       final tempDir = await getTemporaryDirectory();
       final tempFile = File('${tempDir.path}/$fileName');
-      await file!.copy(tempFile.path);
+      await file.copy(tempFile.path);
 
       await Share.shareXFiles(
         [XFile(tempFile.path, name: fileName)],
@@ -143,7 +149,7 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
       );
     } catch (_) {
       await Share.shareXFiles(
-        [XFile(file!.path)],
+        [XFile(file.path)],
         text: 'Cotización de Servicios de Control de Plagas - Folio $folio',
         subject: 'Cotización: ${clientTitle.isNotEmpty ? clientTitle : folio}',
       );
@@ -260,6 +266,19 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
 
   Future<void> _syncFromDrive() async {
     if (!mounted) return;
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (!drive.isSignedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Conecta Google Drive primero para sincronizar cotizaciones.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Row(
@@ -272,8 +291,8 @@ class _QuoteHistoryScreenState extends State<QuoteHistoryScreen> {
         duration: Duration(seconds: 2),
       ),
     );
-    await GoogleDriveSyncService().pullAndMergeCloudDatabase();
-    await GoogleDriveSyncService().discoverDriveDocuments();
+    await drive.pullAndMergeCloudDatabase();
+    await drive.discoverDriveDocuments();
     await _loadHistory();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

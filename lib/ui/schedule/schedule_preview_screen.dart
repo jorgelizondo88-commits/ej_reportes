@@ -5,8 +5,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../models/client_model.dart';
 import '../../models/schedule_model.dart';
 import '../../services/calendar_sync_service.dart';
+import '../../services/client_service.dart';
+import '../../services/google_drive_sync_service.dart';
 import '../../services/schedule_pdf_service.dart';
 
 class SchedulePreviewScreen extends StatefulWidget {
@@ -231,6 +234,29 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
         }
       }
 
+      // Asegurar que el cliente exista en el directorio local antes de actualizar Copia Maestra
+      await ClientService().ensureClientExistsLocal(ClientModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        businessName: widget.schedule.clientBusinessName.trim(),
+        contactName: widget.schedule.clientContactName.trim(),
+        address: widget.schedule.clientAddress.trim(),
+        phone: widget.schedule.clientPhone.trim(),
+        email: widget.schedule.clientEmail.trim(),
+        facilityType: widget.schedule.facilityType,
+        hasTraps: false,
+      ));
+
+      // Guardar PDF en Drive y actualizar Copia Maestra automáticamente
+      final bool cloudMasterUpdated = await GoogleDriveSyncService().saveAndSyncMasterBackup(
+        clientName: widget.schedule.clientBusinessName.isNotEmpty
+            ? widget.schedule.clientBusinessName
+            : widget.schedule.clientContactName,
+        documentType: 'Cronograma',
+        folio: widget.schedule.folio,
+        localFilePath: file.path,
+        fileName: 'Cronograma_$cleanFolio.pdf',
+      );
+
       if (mounted) {
         setState(() {
           _isSaved = true;
@@ -239,9 +265,13 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('¡Cronograma #${widget.schedule.folio} guardado en el historial!'),
-            backgroundColor: Colors.green.shade800,
-            duration: const Duration(seconds: 3),
+            content: Text(
+              cloudMasterUpdated
+                  ? '¡Cronograma #${widget.schedule.folio} guardado y Copia Maestra actualizada en Drive!'
+                  : '¡Cronograma #${widget.schedule.folio} guardado localmente! (Sin conexión a Drive en este momento)',
+            ),
+            backgroundColor: cloudMasterUpdated ? Colors.green.shade800 : Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -393,9 +423,15 @@ class _SchedulePreviewScreenState extends State<SchedulePreviewScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 13),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: Icon(_isSaved ? Icons.check : Icons.save, size: 18),
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : Icon(_isSaved ? Icons.check : Icons.save, size: 18),
                   label: Text(
-                    _isSaved ? 'Guardado ✓' : 'Guardar en Historial',
+                    _isSaving ? 'Guardando...' : (_isSaved ? 'Guardado ✓' : 'Guardar en Historial'),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   onPressed: _isSaving ? null : _saveToHistory,

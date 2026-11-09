@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../models/trap_layout_model.dart';
+import '../../services/google_drive_sync_service.dart';
 import '../../services/trap_layout_pdf_service.dart';
 import '../../services/trap_layout_service.dart';
 import 'trap_layout_canvas_screen.dart';
@@ -26,6 +27,60 @@ class _TrapLayoutsHistoryScreenState extends State<TrapLayoutsHistoryScreen> {
   void initState() {
     super.initState();
     _loadLayouts();
+    _syncLayoutsInBackground();
+  }
+
+  Future<void> _syncLayoutsInBackground() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (drive.isSignedIn) {
+      final merged = await drive.pullAndMergeCloudDatabase();
+      if (merged && mounted) {
+        _loadLayouts();
+      }
+    }
+  }
+
+  Future<void> _syncFromDrive() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (!drive.isSignedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Conecta Google Drive primero para sincronizar planos.')),
+        );
+      }
+      return;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              SizedBox(width: 12),
+              Text('Sincronizando planos con Google Drive...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+    await drive.pullAndMergeCloudDatabase();
+    await _loadLayouts();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Planos actualizados desde Google Drive!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _loadLayouts() async {
@@ -133,6 +188,11 @@ class _TrapLayoutsHistoryScreenState extends State<TrapLayoutsHistoryScreen> {
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sincronizar con Google Drive',
+            onPressed: _syncFromDrive,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar lista',

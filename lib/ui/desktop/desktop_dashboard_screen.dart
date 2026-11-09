@@ -57,6 +57,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   String? _selectedQuoteClientFilter;
   String _selectedInvoiceStatusFilter = 'pending';
   bool _isLoadingPdf = false;
+  bool _isCloudSyncing = false;
   String? _loadingDocId;
   final Set<String> _failedDownloads = {};
 
@@ -201,7 +202,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
     super.dispose();
   }
 
-  Future<void> _loadAllData() async {
+  Future<void> _loadAllData({bool syncFromCloud = true}) async {
     final prefs = await SharedPreferences.getInstance();
 
     // 1. Clientes
@@ -256,36 +257,45 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
       });
     }
 
-    // Refrescar facturas en segundo plano
-    if (_driveService.isSignedIn) {
-      final freshInvoices = await _driveService.fetchInvoices();
-      if (mounted) {
-        setState(() {
-          _invoices = freshInvoices;
-          final freshPending = freshInvoices.where((i) => i.status == 'pending').toList();
-          _pendingInvoiceCount = freshPending.length;
-          if (_selectedInvoiceStatusFilter == 'pending') {
-            if (_selectedInvoice != null && _selectedInvoice!.status != 'pending') {
-              if (freshPending.isNotEmpty) {
-                _onSelectInvoice(freshPending.first);
-              } else {
-                _selectedInvoice = null;
-                _selectedInvoiceFile = null;
-              }
-            }
-          }
-        });
-      }
-    }
-
-    // Sincronización en segundo plano de dos vías (Cotizaciones y Reportes de Google Drive)
-    if (_driveService.isSignedIn) {
-      _driveService.pullAndMergeCloudDatabase().then((merged) async {
-        final discovered = await _driveService.discoverDriveDocuments();
-        if ((merged || discovered > 0) && mounted) {
-          _loadAllData();
+    if (syncFromCloud && !_isCloudSyncing) {
+      _isCloudSyncing = true;
+      try {
+        if (!_driveService.isSignedIn) {
+          await _driveService.initSilently();
+          if (mounted) setState(() {});
         }
-      });
+
+        if (_driveService.isSignedIn) {
+          // Refrescar facturas en segundo plano
+          final freshInvoices = await _driveService.fetchInvoices();
+          if (mounted) {
+            setState(() {
+              _invoices = freshInvoices;
+              final freshPending = freshInvoices.where((i) => i.status == 'pending').toList();
+              _pendingInvoiceCount = freshPending.length;
+              if (_selectedInvoiceStatusFilter == 'pending') {
+                if (_selectedInvoice != null && _selectedInvoice!.status != 'pending') {
+                  if (freshPending.isNotEmpty) {
+                    _onSelectInvoice(freshPending.first);
+                  } else {
+                    _selectedInvoice = null;
+                    _selectedInvoiceFile = null;
+                  }
+                }
+              }
+            });
+          }
+
+          // Sincronización bidireccional segura (Copia Maestra + archivos en Drive), sin bucle recursivo
+          final merged = await _driveService.pullAndMergeCloudDatabase();
+          final discovered = await _driveService.discoverDriveDocuments();
+          if ((merged || discovered > 0) && mounted) {
+            await _loadAllData(syncFromCloud: false);
+          }
+        }
+      } finally {
+        _isCloudSyncing = false;
+      }
     }
   }
 
@@ -409,12 +419,18 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                   child: const Text('JL', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Jorge Elizondo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                      Text('Google Drive 5 TB Conectado', style: TextStyle(color: Colors.greenAccent, fontSize: 9)),
+                      const Text('Jorge Elizondo', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(
+                        _driveService.isSignedIn ? 'Google Drive Conectado' : 'Drive sin conectar',
+                        style: TextStyle(
+                          color: _driveService.isSignedIn ? Colors.greenAccent : Colors.amberAccent,
+                          fontSize: 9,
+                        ),
+                      ),
                     ],
                   ),
                 ),

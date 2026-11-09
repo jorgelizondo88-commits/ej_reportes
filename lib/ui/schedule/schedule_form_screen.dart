@@ -606,7 +606,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
       return;
     }
 
-    if (_saveNewClientToDb && business.isNotEmpty) {
+    if (_saveNewClientToDb && (business.isNotEmpty || contact.isNotEmpty)) {
       final newClient = ClientModel(
         id: _selectedClient?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
         businessName: business,
@@ -617,7 +617,7 @@ class _ScheduleFormScreenState extends State<ScheduleFormScreen> {
         facilityType: _facilityType,
         hasTraps: false,
       );
-      await _clientService.saveClient(newClient);
+      await _clientService.ensureClientExistsLocal(newClient);
       _loadClients();
     }
 

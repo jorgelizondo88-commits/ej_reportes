@@ -5,7 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../models/client_model.dart';
 import '../../models/report_model.dart';
+import '../../services/client_service.dart';
 import '../../services/pdf_service.dart';
 import '../../services/google_drive_sync_service.dart';
 
@@ -97,9 +99,24 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         }
       }
 
-      // Sincronización automática en segundo plano con Google Drive (Offline-First)
-      GoogleDriveSyncService().enqueueAndSync(
-        clientName: widget.report.clientName.isNotEmpty ? widget.report.clientName : widget.report.businessName,
+      // Asegurar que el cliente exista en el directorio local antes de actualizar Copia Maestra
+      await ClientService().ensureClientExistsLocal(ClientModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        businessName: widget.report.businessName.trim(),
+        contactName: widget.report.clientName.trim(),
+        address: widget.report.clientAddress.trim(),
+        phone: widget.report.clientPhone.trim(),
+        email: widget.report.clientEmail.trim(),
+        facilityType: widget.report.facilityType,
+        hasTraps: widget.report.hasTraps,
+        defaultTraps: widget.report.traps
+            .map((t) => ClientTrapTemplate(id: t.id, trapType: t.trapType, location: t.location))
+            .toList(),
+      ));
+
+      // Guardar PDF en carpeta de Drive Y actualizar la Copia Maestra automáticamente antes de terminar
+      final bool cloudMasterUpdated = await GoogleDriveSyncService().saveAndSyncMasterBackup(
+        clientName: widget.report.businessName.isNotEmpty ? widget.report.businessName : widget.report.clientName,
         documentType: 'Reporte',
         folio: widget.report.reportFolio,
         localFilePath: file.path,
@@ -114,9 +131,13 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('¡Reporte #${widget.report.reportFolio} guardado en el historial!'),
-            backgroundColor: Colors.green.shade800,
-            duration: const Duration(seconds: 3),
+            content: Text(
+              cloudMasterUpdated
+                  ? '¡Reporte #${widget.report.reportFolio} guardado y Copia Maestra actualizada en Drive!'
+                  : '¡Reporte #${widget.report.reportFolio} guardado localmente! (Sin conexión a Drive en este momento)',
+            ),
+            backgroundColor: cloudMasterUpdated ? Colors.green.shade800 : Colors.orange.shade800,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -290,9 +311,15 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  icon: Icon(_isSaved ? Icons.check_circle : Icons.save_alt, size: 20),
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : Icon(_isSaved ? Icons.check_circle : Icons.save_alt, size: 20),
                   label: Text(
-                    _isSaved ? 'Guardado ✓' : 'Guardar en Historial',
+                    _isSaving ? 'Guardando...' : (_isSaved ? 'Guardado ✓' : 'Guardar en Historial'),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   onPressed: _isSaving ? null : _saveToHistory,

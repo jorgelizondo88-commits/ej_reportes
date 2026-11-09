@@ -29,6 +29,62 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
   void initState() {
     super.initState();
     _loadHistory();
+    _syncContractsInBackground();
+  }
+
+  Future<void> _syncContractsInBackground() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (drive.isSignedIn) {
+      final merged = await drive.pullAndMergeCloudDatabase();
+      final discovered = await drive.discoverDriveDocuments();
+      if ((merged || discovered > 0) && mounted) {
+        _loadHistory();
+      }
+    }
+  }
+
+  Future<void> _syncFromDrive() async {
+    final drive = GoogleDriveSyncService();
+    if (!drive.isSignedIn) {
+      await drive.initSilently();
+    }
+    if (!drive.isSignedIn) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Conecta Google Drive primero para sincronizar contratos.')),
+        );
+      }
+      return;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+              SizedBox(width: 12),
+              Text('Sincronizando contratos con Google Drive...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+    await drive.pullAndMergeCloudDatabase();
+    await drive.discoverDriveDocuments();
+    await _loadHistory();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Historial de contratos actualizado!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   Future<void> _loadHistory() async {
@@ -110,9 +166,37 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
     final fileName = cleanClient.isEmpty ? 'Contrato_$cleanFolio.pdf' : 'Contrato_${cleanFolio}_$cleanClient.pdf';
 
     final pdfPath = item['pdfPath'] as String?;
-    if (pdfPath != null && File(pdfPath).existsSync()) {
+    File? file = (pdfPath != null && pdfPath.isNotEmpty && File(pdfPath).existsSync()) ? File(pdfPath) : null;
+
+    if (file == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                SizedBox(width: 12),
+                Text('Descargando contrato desde Google Drive...'),
+              ],
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      file = await GoogleDriveSyncService().downloadDocumentPdf(
+        clientName: client,
+        documentType: 'Contrato',
+        folio: folio,
+      );
+      if (file != null && file.existsSync()) {
+        item['pdfPath'] = file.path;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_contractsHistoryKey, jsonEncode(_allContracts));
+      }
+    }
+
+    if (file != null && file.existsSync()) {
       try {
-        final file = File(pdfPath);
         final tempDir = await getTemporaryDirectory();
         final tempFile = File('${tempDir.path}/$fileName');
         await file.copy(tempFile.path);
@@ -126,7 +210,7 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
       } catch (_) {}
     }
 
-    // Si no está el archivo en disco, reconstruimos el modelo y generamos
+    // Si no está en disco ni en Drive, reconstruimos el modelo y abrimos vista previa
     try {
       final model = ContractModel.fromMap(item);
       if (mounted) {
@@ -145,68 +229,70 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
   }
 
   void _openViewer(Map<String, dynamic> item) async {
+    String? pdfPath = item['pdfPath'] as String?;
+    File? file = (pdfPath != null && pdfPath.isNotEmpty) ? File(pdfPath) : null;
+
+    if (file == null || !file.existsSync()) {
+      final client = (item['businessName'] ?? item['clientName'] ?? '').toString().trim();
+      final folio = (item['folio'] ?? '').toString().trim();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                SizedBox(width: 12),
+                Text('Descargando contrato desde Google Drive...'),
+              ],
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+
+      file = await GoogleDriveSyncService().downloadDocumentPdf(
+        clientName: client,
+        documentType: 'Contrato',
+        folio: folio,
+      );
+
+      if (file != null && file.existsSync()) {
+        item['pdfPath'] = file.path;
+        pdfPath = file.path;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_contractsHistoryKey, jsonEncode(_allContracts));
+      }
+    }
+
+    if (pdfPath != null && File(pdfPath).existsSync()) {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => _SavedContractViewer(
+            title: 'Contrato: ${item['folio']}',
+            filePath: pdfPath!,
+            folio: (item['folio'] ?? '').toString(),
+            clientName: (item['businessName'] ?? item['clientName'] ?? '').toString(),
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       final model = ContractModel.fromMap(item);
+      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => ContractPreviewScreen(contract: model)),
       );
     } catch (_) {
-      String? pdfPath = item['pdfPath'] as String?;
-      File? file = (pdfPath != null && pdfPath.isNotEmpty) ? File(pdfPath) : null;
-
-      if (file == null || !file.existsSync()) {
-        final client = (item['businessName'] ?? item['clientName'] ?? '').toString().trim();
-        final folio = (item['folio'] ?? '').toString().trim();
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(
-                children: [
-                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                  SizedBox(width: 12),
-                  Text('Descargando contrato desde Google Drive...'),
-                ],
-              ),
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
-
-        file = await GoogleDriveSyncService().downloadDocumentPdf(
-          clientName: client,
-          documentType: 'Contrato',
-          folio: folio,
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo encontrar el archivo del contrato.')),
         );
-
-        if (file != null && file.existsSync()) {
-          item['pdfPath'] = file.path;
-          pdfPath = file.path;
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(_contractsHistoryKey, jsonEncode(_allContracts));
-        }
-      }
-
-      if (pdfPath != null && File(pdfPath).existsSync()) {
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => _SavedContractViewer(
-              title: 'Contrato: ${item['folio']}',
-              filePath: pdfPath!,
-              folio: (item['folio'] ?? '').toString(),
-              clientName: (item['businessName'] ?? item['clientName'] ?? '').toString(),
-            ),
-          ),
-        );
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No se pudo encontrar el archivo del contrato.')),
-          );
-        }
       }
     }
   }
@@ -268,6 +354,13 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
         title: const Text('Historial de Contratos', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sincronizar con Google Drive',
+            onPressed: _syncFromDrive,
+          ),
+        ],
       ),
       body: Column(
         children: [
