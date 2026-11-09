@@ -87,4 +87,44 @@ void main() {
     expect(queue.first.status, 'pending');
     expect(queue.first.documentType, 'Reporte');
   });
+
+  test('pickClientDisplayName prioriza businessName no vacío y usa clientName como respaldo', () {
+    final service = GoogleDriveSyncService();
+
+    expect(
+      service.pickClientDisplayName({'businessName': '  Empresa ABC  ', 'clientName': 'Juan Pérez'}),
+      'Empresa ABC',
+    );
+    expect(
+      service.pickClientDisplayName({'businessName': '', 'clientName': '  Juan Pérez  '}),
+      'Juan Pérez',
+    );
+    expect(
+      service.pickClientDisplayName({'businessName': '   ', 'clientName': ''}),
+      'Cliente',
+    );
+    expect(
+      service.pickClientDisplayName({'businessName': null, 'clientName': null}, fallback: ''),
+      '',
+    );
+  });
+
+  test('saveAndSyncMasterBackup encola el archivo localmente aunque no haya sesión en Drive', () async {
+    final service = GoogleDriveSyncService();
+
+    final ok = await service.saveAndSyncMasterBackup(
+      clientName: 'Cliente Prueba',
+      documentType: 'Reporte',
+      folio: 'EJ-REP-2026',
+      localFilePath: '/tmp/ej_rep_2026.pdf',
+      fileName: 'Reporte_EJ-REP-2026.pdf',
+    );
+
+    expect(ok, false);
+    final queue = await service.getQueue();
+    expect(queue.length, 1);
+    expect(queue.first.folio, 'EJ-REP-2026');
+    expect(queue.first.clientName, 'Cliente Prueba');
+    expect(queue.first.status, 'pending');
+  });
 }

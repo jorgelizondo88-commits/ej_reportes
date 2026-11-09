@@ -314,13 +314,23 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
 
   Future<void> _backupDatabase() async {
     setState(() => _isLoading = true);
-    final ok = await _driveService.backupDatabaseToCloud();
-    setState(() => _isLoading = false);
-
+    final ok = await _driveService.saveAndSyncMasterBackup();
+    final queue = await _driveService.getQueue();
     if (mounted) {
+      setState(() {
+        _queue = queue;
+        _isLoading = false;
+      });
+      if (ok) {
+        widget.onDataRestored?.call();
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? '¡Copia de seguridad maestra creada en Google Drive!' : 'Error al respaldar base de datos.'),
+          content: Text(
+            ok
+                ? '¡Pendientes subidos y Copia Maestra actualizada en Google Drive!'
+                : 'Error al respaldar base de datos.',
+          ),
           backgroundColor: ok ? Colors.green.shade800 : Colors.red,
         ),
       );

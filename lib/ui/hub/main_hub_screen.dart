@@ -78,8 +78,12 @@ class _MainHubScreenState extends State<MainHubScreen> {
       await GoogleDriveSyncService().initSilently();
     }
     if (GoogleDriveSyncService().isSignedIn) {
-      GoogleDriveSyncService().pullAndMergeCloudDatabase().then((merged) async {
+      GoogleDriveSyncService().processQueue(updateMasterBackup: false).then((uploaded) async {
+        final merged = await GoogleDriveSyncService().pullAndMergeCloudDatabase();
         final discovered = await GoogleDriveSyncService().discoverDriveDocuments();
+        if (uploaded) {
+          await GoogleDriveSyncService().backupDatabaseToCloud(force: true);
+        }
         if ((merged || discovered > 0) && mounted) {
           final p = await SharedPreferences.getInstance();
           final rR = p.getString('ej_reports_history_list');

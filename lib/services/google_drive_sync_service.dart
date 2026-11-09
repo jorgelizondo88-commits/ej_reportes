@@ -628,8 +628,9 @@ class GoogleDriveSyncService {
       final localClients = await ClientService().getSavedClients();
       final Set<String> clientNames = {};
       for (final c in localClients) {
-        if (c.businessName.trim().isNotEmpty) {
-          clientNames.add(c.businessName.trim());
+        final name = c.businessName.trim().isNotEmpty ? c.businessName.trim() : c.contactName.trim();
+        if (name.isNotEmpty) {
+          clientNames.add(name);
         }
       }
 
@@ -972,7 +973,7 @@ class GoogleDriveSyncService {
 
         // Subir Copia Maestra actualizada
         return await backupDatabaseToCloud(force: true);
-      }().timeout(const Duration(seconds: 35));
+      }().timeout(Duration(seconds: hasFile ? 45 : 120));
     } catch (e) {
       debugPrint('Error en saveAndSyncMasterBackup: $e');
       return false;
@@ -1785,6 +1786,14 @@ class GoogleDriveSyncService {
 
   // --- SINCRONIZACIÓN COMPLETA DE TODO EL HISTORIAL EXISTENTE ---
 
+  String pickClientDisplayName(Map item, {String fallback = 'Cliente'}) {
+    final bn = (item['businessName'] ?? '').toString().trim();
+    if (bn.isNotEmpty) return bn;
+    final cn = (item['clientName'] ?? '').toString().trim();
+    if (cn.isNotEmpty) return cn;
+    return fallback;
+  }
+
   Future<Map<String, int>> syncAllHistoryNow({Function(String status, double progress)? onProgress}) async {
     final api = await _getDriveApi();
     if (api == null) return {'reports': 0, 'quotes': 0, 'contracts': 0, 'layouts': 0};
@@ -1816,7 +1825,7 @@ class GoogleDriveSyncService {
             final rep = Map<String, dynamic>.from(list[i]);
             final folio = (rep['folio'] ?? 'S_N').toString();
             final cleanFolio = folio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-            final clientName = (rep['businessName'] ?? rep['clientName'] ?? 'Cliente').toString();
+            final clientName = pickClientDisplayName(rep);
             final filePath = rep['filePath'] as String?;
             final fileName = 'Reporte_$cleanFolio.pdf';
 
@@ -1858,7 +1867,7 @@ class GoogleDriveSyncService {
             final q = Map<String, dynamic>.from(list[i]);
             final folio = (q['folio'] ?? 'S_N').toString();
             final cleanFolio = folio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-            final clientName = (q['businessName'] ?? q['clientName'] ?? 'Cliente').toString();
+            final clientName = pickClientDisplayName(q);
             final filePath = q['filePath'] as String?;
             final fileName = 'Cotizacion_$cleanFolio.pdf';
 
@@ -1899,7 +1908,7 @@ class GoogleDriveSyncService {
             final c = Map<String, dynamic>.from(list[i]);
             final folio = (c['folio'] ?? 'S_N').toString();
             final cleanFolio = folio.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-            final clientName = (c['businessName'] ?? c['clientName'] ?? 'Cliente').toString();
+            final clientName = pickClientDisplayName(c);
             final pdfPath = c['pdfPath'] as String?;
             final fileName = 'Contrato_$cleanFolio.pdf';
 
@@ -2157,7 +2166,9 @@ class GoogleDriveSyncService {
 
       // Ejecutar consultas de clientes en paralelo ultrarrápido
       final clientTasks = savedClients.map((client) async {
-        final clientName = client.businessName.trim();
+        final clientName = client.businessName.trim().isNotEmpty
+            ? client.businessName.trim()
+            : client.contactName.trim();
         if (clientName.isEmpty) return;
 
         if (clientFilter != null && clientFilter.trim().isNotEmpty) {
@@ -2529,7 +2540,11 @@ class GoogleDriveSyncService {
 
     try {
       final cleanFolio = folio.trim().replaceAll(RegExp(r'[^\w-]'), '_');
-      final targetFolderId = await _getCategoryFolderId(api, clientName, documentType);
+      final altFolioDash = cleanFolio.replaceAll('_', '-');
+      final altFolioUnderscore = cleanFolio.replaceAll('-', '_');
+      final targetFolderId = clientName.trim().isNotEmpty
+          ? await _getCategoryFolderId(api, clientName, documentType)
+          : null;
 
       List<drive.File> candidates = [];
 
@@ -2544,7 +2559,7 @@ class GoogleDriveSyncService {
       }
 
       // 2. Si no se encontró en la subcarpeta, buscar en la carpeta raíz del cliente
-      if (candidates.isEmpty) {
+      if (candidates.isEmpty && clientName.trim().isNotEmpty) {
         final clientFolderId = await _getClientFolderId(api, clientName);
         if (clientFolderId != null) {
           final res = await api.files.list(
@@ -2556,13 +2571,19 @@ class GoogleDriveSyncService {
         }
       }
 
-      if (candidates.isEmpty) return null;
+      bool matchesFolio(String name) {
+        if (cleanFolio.isEmpty) return false;
+        final lower = name.toLowerCase();
+        return lower.contains(cleanFolio.toLowerCase()) ||
+            lower.contains(altFolioDash.toLowerCase()) ||
+            lower.contains(altFolioUnderscore.toLowerCase());
+      }
 
       // 3. Buscar el archivo que contenga el folio o coincida con el nombre preferido
       drive.File? matchedFile;
       for (final f in candidates) {
-        final name = (f.name ?? '').toLowerCase();
-        if (cleanFolio.isNotEmpty && name.contains(cleanFolio.toLowerCase())) {
+        final name = f.name ?? '';
+        if (matchesFolio(name)) {
           matchedFile = f;
           break;
         }
@@ -2578,7 +2599,37 @@ class GoogleDriveSyncService {
         }
       }
 
-      if (matchedFile == null && candidates.isNotEmpty) {
+      // 4. Búsqueda global en Drive por folio (respaldo por si el PDF quedó guardado bajo nombre de contacto o Cliente General)
+      if (matchedFile == null && cleanFolio.isNotEmpty) {
+        try {
+          final safeUnder = altFolioUnderscore.replaceAll("'", r"\'");
+          final safeDash = altFolioDash.replaceAll("'", r"\'");
+          final qGlobal = safeUnder == safeDash
+              ? "name contains '$safeUnder' and mimeType = 'application/pdf' and trashed = false"
+              : "(name contains '$safeUnder' or name contains '$safeDash') and mimeType = 'application/pdf' and trashed = false";
+          final globalRes = await api.files.list(
+            q: qGlobal,
+            $fields: 'files(id, name, createdTime)',
+            orderBy: 'modifiedTime desc',
+            pageSize: 15,
+          );
+          final globalFiles = globalRes.files ?? [];
+          if (globalFiles.isNotEmpty) {
+            String prefix = '';
+            if (documentType.contains('Repor')) prefix = 'reporte';
+            if (documentType.contains('Cotiz')) prefix = 'cotizacion';
+            if (documentType.contains('Contrat')) prefix = 'contrato';
+            if (documentType.contains('Crono')) prefix = 'cronograma';
+            if (documentType.contains('Plan')) prefix = 'plano';
+            matchedFile = globalFiles.firstWhere(
+              (f) => prefix.isEmpty || (f.name ?? '').toLowerCase().contains(prefix),
+              orElse: () => globalFiles.first,
+            );
+          }
+        } catch (_) {}
+      }
+
+      if (matchedFile == null && cleanFolio.isEmpty && candidates.isNotEmpty) {
         matchedFile = candidates.first;
       }
 

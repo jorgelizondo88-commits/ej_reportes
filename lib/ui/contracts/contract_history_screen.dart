@@ -233,7 +233,9 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
     File? file = (pdfPath != null && pdfPath.isNotEmpty) ? File(pdfPath) : null;
 
     if (file == null || !file.existsSync()) {
-      final client = (item['businessName'] ?? item['clientName'] ?? '').toString().trim();
+      final bn = (item['businessName'] ?? '').toString().trim();
+      final cn = (item['clientName'] ?? '').toString().trim();
+      final client = bn.isNotEmpty ? bn : cn;
       final folio = (item['folio'] ?? '').toString().trim();
 
       if (mounted) {
@@ -274,7 +276,9 @@ class _ContractHistoryScreenState extends State<ContractHistoryScreen> {
             title: 'Contrato: ${item['folio']}',
             filePath: pdfPath!,
             folio: (item['folio'] ?? '').toString(),
-            clientName: (item['businessName'] ?? item['clientName'] ?? '').toString(),
+            clientName: (item['businessName'] ?? '').toString().trim().isNotEmpty
+                ? item['businessName'].toString().trim()
+                : (item['clientName'] ?? '').toString().trim(),
           ),
         ),
       );

@@ -61,9 +61,17 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   String? _loadingDocId;
   final Set<String> _failedDownloads = {};
 
+  String _docClientName(Map<String, dynamic> item, {String fallback = ''}) {
+    final bn = (item['businessName'] ?? '').toString().trim();
+    if (bn.isNotEmpty) return bn;
+    final cn = (item['clientName'] ?? '').toString().trim();
+    if (cn.isNotEmpty) return cn;
+    return fallback;
+  }
+
   Future<void> _onSelectReport(Map<String, dynamic> item) async {
     final folio = (item['folio'] ?? 'S_N').toString();
-    final clientName = (item['businessName'] ?? item['clientName'] ?? '').toString();
+    final clientName = _docClientName(item);
     final currentPath = item['filePath'] as String?;
     final localExists = currentPath != null && currentPath.isNotEmpty && File(currentPath).existsSync();
 
@@ -116,7 +124,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
 
   Future<void> _onSelectQuote(Map<String, dynamic> item) async {
     final folio = (item['folio'] ?? 'S_N').toString();
-    final clientName = (item['businessName'] ?? item['clientName'] ?? '').toString();
+    final clientName = _docClientName(item);
     final currentPath = item['filePath'] as String?;
     final localExists = currentPath != null && currentPath.isNotEmpty && File(currentPath).existsSync();
 
@@ -232,6 +240,9 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
     final pendingInvs = cachedInvoices.where((i) => i.status == 'pending').toList();
 
     if (mounted) {
+      Map<String, dynamic>? reportToLoad;
+      Map<String, dynamic>? quoteToLoad;
+
       setState(() {
         _clientCount = clients.length;
         _reportCount = reportsList.length;
@@ -243,18 +254,54 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         _invoices = cachedInvoices;
         _pendingInvoiceCount = pendingInvs.length;
 
-        if (_reports.isNotEmpty && _selectedReport == null) {
-          _selectedReport = _reports.first;
-          _onSelectReport(_reports.first);
+        if (_reports.isNotEmpty) {
+          if (_selectedReport == null) {
+            _selectedReport = _reports.first;
+            reportToLoad = _reports.first;
+          } else {
+            final selFolio = (_selectedReport!['folio'] ?? '').toString();
+            final idx = _reports.indexWhere((r) => (r['folio'] ?? '').toString() == selFolio);
+            _selectedReport = idx >= 0 ? _reports[idx] : _reports.first;
+            if (!syncFromCloud && _selectedModuleIndex == 0) {
+              final p = _selectedReport!['filePath'] as String?;
+              if (p == null || p.isEmpty || !File(p).existsSync()) {
+                reportToLoad = _selectedReport;
+              }
+            }
+          }
+        } else {
+          _selectedReport = null;
         }
-        if (_quotes.isNotEmpty && _selectedQuote == null) {
-          _selectedQuote = _quotes.first;
+
+        if (_quotes.isNotEmpty) {
+          if (_selectedQuote == null) {
+            _selectedQuote = _quotes.first;
+          } else {
+            final selFolio = (_selectedQuote!['folio'] ?? '').toString();
+            final idx = _quotes.indexWhere((q) => (q['folio'] ?? '').toString() == selFolio);
+            _selectedQuote = idx >= 0 ? _quotes[idx] : _quotes.first;
+          }
+          if (!syncFromCloud && _selectedModuleIndex == 1) {
+            final p = _selectedQuote!['filePath'] as String?;
+            if (p == null || p.isEmpty || !File(p).existsSync()) {
+              quoteToLoad = _selectedQuote;
+            }
+          }
+        } else {
+          _selectedQuote = null;
         }
+
         if (_invoices.isNotEmpty && _selectedInvoice == null) {
           final pending = _invoices.where((i) => i.status == 'pending').toList();
           _selectedInvoice = pending.isNotEmpty ? pending.first : _invoices.first;
         }
       });
+
+      if (reportToLoad != null) {
+        _onSelectReport(reportToLoad!);
+      } else if (quoteToLoad != null) {
+        _onSelectQuote(quoteToLoad!);
+      }
     }
 
     if (syncFromCloud && !_isCloudSyncing) {
@@ -286,10 +333,14 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
             });
           }
 
-          // Sincronización bidireccional segura (Copia Maestra + archivos en Drive), sin bucle recursivo
+          // Sincronización bidireccional segura (cola pendiente + Copia Maestra + archivos en Drive), sin bucle recursivo
+          final uploaded = await _driveService.processQueue(updateMasterBackup: false);
           final merged = await _driveService.pullAndMergeCloudDatabase();
           final discovered = await _driveService.discoverDriveDocuments();
-          if ((merged || discovered > 0) && mounted) {
+          if (uploaded) {
+            await _driveService.backupDatabaseToCloud(force: true);
+          }
+          if ((merged || discovered > 0 || uploaded) && mounted) {
             await _loadAllData(syncFromCloud: false);
           }
         }
@@ -697,15 +748,13 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   Widget _buildSplitReportsView() {
     final clientNames = <String>{};
     for (final r in _reports) {
-      final name = (r['businessName'] != null && r['businessName'].toString().trim().isNotEmpty)
-          ? r['businessName'].toString().trim()
-          : (r['clientName'] ?? '').toString().trim();
+      final name = _docClientName(r);
       if (name.isNotEmpty) clientNames.add(name);
     }
     final sortedClients = clientNames.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     final filtered = _reports.where((r) {
-      final client = (r['businessName'] ?? r['clientName'] ?? '').toString();
+      final client = _docClientName(r);
       final folio = (r['folio'] ?? '').toString().toLowerCase();
 
       if (_selectedReportClientFilter != null && _selectedReportClientFilter!.isNotEmpty) {
@@ -808,7 +857,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                           itemBuilder: (context, i) {
                             final item = filtered[i];
                             final isSel = _selectedReport != null && _selectedReport!['folio'] == item['folio'];
-                            final clientName = (item['businessName'] ?? item['clientName'] ?? 'Cliente').toString();
+                            final clientName = _docClientName(item, fallback: 'Cliente');
                             final folio = (item['folio'] ?? 'S_N').toString();
 
                             final rawDate = (item['serviceDate'] ?? item['date'] ?? item['createdAt'] ?? '').toString();
@@ -871,7 +920,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                   ? const Center(child: Text('Selecciona un reporte para visualizar el PDF', style: TextStyle(color: Colors.black45)))
                   : _buildPdfViewerPane(
                       title: 'Reporte Folio: ${_selectedReport!['folio']}',
-                      clientName: (_selectedReport!['businessName'] ?? _selectedReport!['clientName'] ?? '').toString(),
+                      clientName: _docClientName(_selectedReport!),
                       filePath: _selectedReport!['filePath'] as String?,
                       documentType: 'Reporte',
                       folio: (_selectedReport!['folio'] ?? '').toString(),
@@ -887,15 +936,13 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   Widget _buildSplitQuotesView() {
     final clientNames = <String>{};
     for (final q in _quotes) {
-      final name = (q['businessName'] != null && q['businessName'].toString().trim().isNotEmpty)
-          ? q['businessName'].toString().trim()
-          : (q['clientName'] ?? '').toString().trim();
+      final name = _docClientName(q);
       if (name.isNotEmpty) clientNames.add(name);
     }
     final sortedClients = clientNames.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
     final filtered = _quotes.where((q) {
-      final client = (q['businessName'] ?? q['clientName'] ?? '').toString();
+      final client = _docClientName(q);
       final folio = (q['folio'] ?? '').toString().toLowerCase();
 
       if (_selectedQuoteClientFilter != null && _selectedQuoteClientFilter!.isNotEmpty) {
@@ -997,7 +1044,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                           itemBuilder: (context, i) {
                             final item = filtered[i];
                             final isSel = _selectedQuote != null && _selectedQuote!['folio'] == item['folio'];
-                            final clientName = (item['businessName'] ?? item['clientName'] ?? 'Cliente').toString();
+                            final clientName = _docClientName(item, fallback: 'Cliente');
                             final folio = (item['folio'] ?? 'S_N').toString();
                             final total = (item['total'] ?? item['amount'] ?? '').toString();
 
@@ -1063,7 +1110,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                   ? const Center(child: Text('Selecciona una cotización para visualizar', style: TextStyle(color: Colors.black45)))
                   : _buildPdfViewerPane(
                       title: 'Cotización Folio: ${_selectedQuote!['folio']}',
-                      clientName: (_selectedQuote!['businessName'] ?? _selectedQuote!['clientName'] ?? '').toString(),
+                      clientName: _docClientName(_selectedQuote!),
                       filePath: _selectedQuote!['filePath'] as String?,
                       documentType: 'Cotización',
                       folio: (_selectedQuote!['folio'] ?? '').toString(),
