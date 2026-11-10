@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../models/certificate_model.dart';
 import '../models/client_model.dart';
 import '../models/cloud_sync_item_model.dart';
 import '../models/invoice_model.dart';
@@ -563,10 +564,14 @@ class GoogleDriveSyncService {
     return await _getOrCreateFolder(api, resolvedName, parentId: clientsRootId);
   }
 
-  // Obtener subcarpeta por categoría (Reportes, Cotizaciones, Contratos, Planos, Facturas)
+  // Obtener subcarpeta por categoría (Reportes, Cotizaciones, Contratos, Planos, Facturas, Certificados)
   Future<String?> _getCategoryFolderId(drive.DriveApi api, String clientName, String documentType) async {
     final clientFolderId = await _getClientFolderId(api, clientName);
     if (clientFolderId == null) return null;
+
+    if (documentType.contains('Certificad')) {
+      return await _getOrReuseClientCertificatesFolderId(api, clientFolderId);
+    }
 
     String subfolderName = '1_Reportes_de_Servicio';
     if (documentType.contains('Cotiz')) subfolderName = '2_Cotizaciones';
@@ -576,6 +581,136 @@ class GoogleDriveSyncService {
     if (documentType.contains('Factur')) subfolderName = '5_Facturas';
 
     return await _getOrCreateFolder(api, subfolderName, parentId: clientFolderId);
+  }
+
+  /// Lista todas las carpetas hijas no eliminadas dentro de `parentId` (paginado)
+  Future<List<drive.File>> _listDriveFoldersPaginated(drive.DriveApi api, String parentId) async {
+    final List<drive.File> folders = [];
+    String? pageToken;
+    do {
+      final res = await api.files.list(
+        q: "'$parentId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        $fields: 'nextPageToken, files(id, name)',
+        pageSize: 500,
+        pageToken: pageToken,
+      );
+      if (res.files != null) folders.addAll(res.files!);
+      pageToken = res.nextPageToken;
+    } while (pageToken != null && pageToken.isNotEmpty);
+    return folders;
+  }
+
+  /// Lista todos los hijos (archivos o subcarpetas) no eliminados dentro de `parentId` (paginado)
+  Future<List<drive.File>> _listDriveItemsPaginated(drive.DriveApi api, String parentId) async {
+    final List<drive.File> items = [];
+    String? pageToken;
+    do {
+      final res = await api.files.list(
+        q: "'$parentId' in parents and trashed = false",
+        $fields: 'nextPageToken, files(id, name, mimeType, createdTime, modifiedTime, size, webViewLink)',
+        pageSize: 500,
+        pageToken: pageToken,
+      );
+      if (res.files != null) items.addAll(res.files!);
+      pageToken = res.nextPageToken;
+    } while (pageToken != null && pageToken.isNotEmpty);
+    return items;
+  }
+
+  /// Busca una carpeta existente de Certificados dentro de `clientFolderId` (ej. "Certificados", "6_Certificados",
+  /// "Certificados de Fumigación") para reutilizarla sin duplicar; si no existe, crea "Certificados".
+  Future<String> _getOrReuseClientCertificatesFolderId(drive.DriveApi api, String clientFolderId) async {
+    try {
+      final subFolders = await _listDriveFoldersPaginated(api, clientFolderId);
+      final matches = subFolders.where((f) => CertificateModel.isCertificateFolderName(f.name ?? '')).toList();
+      if (matches.isNotEmpty) {
+        final exact = matches.firstWhere(
+          (f) => (f.name ?? '').trim().toLowerCase() == 'certificados',
+          orElse: () => matches.first,
+        );
+        if (exact.id != null) {
+          final cacheKey = '${clientFolderId}_${exact.name ?? 'Certificados'}';
+          _folderIdCache[cacheKey] = exact.id!;
+          _verifiedFolderKeysThisSession.add(cacheKey);
+          return exact.id!;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error buscando carpeta Certificados existente: $e');
+    }
+    return await _getOrCreateFolder(api, 'Certificados', parentId: clientFolderId);
+  }
+
+  /// Asegura que la carpeta "Certificados" exista para un cliente específico en Google Drive
+  Future<void> ensureCertificateFolderExist(String clientName) async {
+    final api = await _getDriveApi();
+    if (api == null) return;
+    try {
+      final clientFolderId = await _getClientFolderId(api, clientName);
+      if (clientFolderId != null) {
+        await _getOrReuseClientCertificatesFolderId(api, clientFolderId);
+      }
+    } catch (e) {
+      debugPrint('Error creando carpeta de Certificados para $clientName: $e');
+    }
+  }
+
+  /// Crea la carpeta "Certificados" para TODOS los clientes existentes
+  /// (tanto en la base de datos local como carpetas existentes en Google Drive),
+  /// respetando carpetas de certificados ya creadas sin duplicar.
+  Future<int> ensureCertificateFoldersForAllClients({Function(String status, double progress)? onProgress}) async {
+    final api = await _getDriveApi();
+    if (api == null) return 0;
+
+    int totalProcessed = 0;
+    try {
+      final clientsRootId = await _getClientsRootFolderId(api);
+      if (clientsRootId == null) return 0;
+
+      final Map<String, drive.File> existingDriveFoldersByNorm = {};
+      final Map<String, String> allClientsByNorm = {};
+
+      // 1. Leer primero las carpetas existentes en Drive para reusar sus IDs directamente
+      try {
+        final driveFolders = await _listDriveFoldersPaginated(api, clientsRootId);
+        for (final f in driveFolders) {
+          final name = (f.name ?? '').trim();
+          if (name.isEmpty || f.id == null) continue;
+          final norm = name.toLowerCase();
+          existingDriveFoldersByNorm.putIfAbsent(norm, () => f);
+          allClientsByNorm.putIfAbsent(norm, () => name);
+        }
+      } catch (_) {}
+
+      // 2. Completar con catálogo local guardado
+      final localClients = await ClientService().getSavedClients();
+      for (final c in localClients) {
+        final name = c.businessName.trim().isNotEmpty ? c.businessName.trim() : c.contactName.trim();
+        if (name.isEmpty) continue;
+        final norm = name.toLowerCase();
+        allClientsByNorm.putIfAbsent(norm, () => name);
+      }
+
+      final entries = allClientsByNorm.entries.toList();
+      if (entries.isEmpty) return 0;
+
+      for (int i = 0; i < entries.length; i++) {
+        final norm = entries[i].key;
+        final name = entries[i].value;
+        onProgress?.call('Preparando carpeta "Certificados" para "$name"...', (i + 1) / entries.length);
+
+        String? clientFolderId = existingDriveFoldersByNorm[norm]?.id;
+        clientFolderId ??= await _getClientFolderId(api, name);
+        if (clientFolderId != null) {
+          await _getOrReuseClientCertificatesFolderId(api, clientFolderId);
+          totalProcessed++;
+        }
+      }
+      onProgress?.call('¡Carpeta "Certificados" lista para $totalProcessed clientes!', 1.0);
+    } catch (e) {
+      debugPrint('Error en ensureCertificateFoldersForAllClients: $e');
+    }
+    return totalProcessed;
   }
 
   // Obtener carpeta raíz "5_Facturas" dentro de un cliente
@@ -1008,6 +1143,7 @@ class GoogleDriveSyncService {
         // Excluir claves locales de dispositivo o caché
         if (key == _folderCacheKey ||
             key == _queueStorageKey ||
+            key == 'ej_cached_certificates' ||
             key == _windowsAccessTokenKey ||
             key == _windowsRefreshTokenKey ||
             key == _windowsTokenExpiryKey ||
@@ -1194,6 +1330,7 @@ class GoogleDriveSyncService {
         // No sobreescribir claves exclusivas de sesión local o caché de este dispositivo
         if (key == _folderCacheKey ||
             key == _queueStorageKey ||
+            key == 'ej_cached_certificates' ||
             key == _windowsAccessTokenKey ||
             key == _windowsRefreshTokenKey ||
             key == _windowsTokenExpiryKey ||
@@ -2367,9 +2504,10 @@ class GoogleDriveSyncService {
       } catch (_) {}
     }
 
-    // 5. Preparar carpetas de facturas para todos los clientes (5_Facturas/Pendientes_de_Pago, Pagadas, Canceladas)
-    onProgress?.call('Preparando carpetas de facturas para clientes...', 0.90);
+    // 5. Preparar carpetas de facturas y certificados para todos los clientes
+    onProgress?.call('Preparando carpetas de facturas y certificados para clientes...', 0.90);
     await ensureInvoiceFoldersForAllClients();
+    await ensureCertificateFoldersForAllClients();
 
     // 6. Respaldar base de datos unificada en Google Drive
     onProgress?.call('Guardando base de datos unificada en Google Drive...', 0.95);
@@ -3082,6 +3220,260 @@ class GoogleDriveSyncService {
       return localFile;
     } catch (e) {
       debugPrint('Error descargando documento PDF desde Google Drive: $e');
+      return null;
+    }
+  }
+
+  // =========================================================================
+  // GESTIÓN DE CERTIFICADOS DE FUMIGACIÓN EN PDF (CARPETA "Certificados")
+  // =========================================================================
+
+  static const String _certificatesCacheKey = 'ej_cached_certificates';
+
+  /// Ordena certificados por fecha de ingreso/agregado a la carpeta (más recientes primero por defecto).
+  List<CertificateModel> sortCertificates(List<CertificateModel> items, {bool newestFirst = true}) {
+    final sorted = List<CertificateModel>.from(items);
+    sorted.sort((a, b) {
+      final addedCmp = newestFirst
+          ? b.addedTime.compareTo(a.addedTime)
+          : a.addedTime.compareTo(b.addedTime);
+      if (addedCmp != 0) return addedCmp;
+
+      final createdCmp = newestFirst
+          ? b.createdTime.compareTo(a.createdTime)
+          : a.createdTime.compareTo(b.createdTime);
+      if (createdCmp != 0) return createdCmp;
+
+      return a.pdfName.toLowerCase().compareTo(b.pdfName.toLowerCase());
+    });
+    return sorted;
+  }
+
+  /// Obtiene los certificados guardados en caché local de forma instantánea (0 ms).
+  Future<List<CertificateModel>> getCachedCertificates() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_certificatesCacheKey);
+      if (raw == null || raw.isEmpty) return [];
+      final List<dynamic> list = jsonDecode(raw);
+      final parsed = list.map((item) => CertificateModel.fromMap(Map<String, dynamic>.from(item))).toList();
+      return sortCertificates(parsed, newestFirst: true);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  bool _isPdfDriveFile(drive.File f) {
+    final name = (f.name ?? '').trim().toLowerCase();
+    final mime = (f.mimeType ?? '').trim().toLowerCase();
+    return name.endsWith('.pdf') || mime == 'application/pdf';
+  }
+
+  /// Lista todos los certificados en PDF subidos a la carpeta "Certificados" de cada cliente en Google Drive,
+  /// ordenados automáticamente del más reciente al más antiguo según su fecha de ingreso/subida a la carpeta.
+  Future<List<CertificateModel>> fetchCertificates({String? clientFilter}) async {
+    final api = await _getDriveApi();
+    if (api == null) return await getCachedCertificates();
+
+    final Map<String, CertificateModel> certsMap = {};
+
+    try {
+      final clientsRootId = await _getClientsRootFolderId(api);
+      if (clientsRootId == null) return await getCachedCertificates();
+
+      final savedClients = await ClientService().getSavedClients();
+      final Map<String, ClientModel> clientLookup = {};
+      for (final c in savedClients) {
+        final bn = c.businessName.trim().toLowerCase();
+        final cn = c.contactName.trim().toLowerCase();
+        if (bn.isNotEmpty) clientLookup.putIfAbsent(bn, () => c);
+        if (cn.isNotEmpty) clientLookup.putIfAbsent(cn, () => c);
+      }
+
+      // Listar todas las carpetas reales de clientes dentro de "EJ Exterminadores / Clientes" en 1 llamada
+      final driveClientFolders = await _listDriveFoldersPaginated(api, clientsRootId);
+      if (driveClientFolders.isEmpty) {
+        if (clientFilter == null || clientFilter.trim().isEmpty) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_certificatesCacheKey, jsonEncode([]));
+        }
+        return [];
+      }
+
+      final filterNorm = (clientFilter ?? '').trim().toLowerCase();
+      final targetFolders = driveClientFolders.where((f) {
+        final folderName = (f.name ?? '').trim();
+        if (folderName.isEmpty || f.id == null) return false;
+        if (filterNorm.isEmpty) return true;
+        final matched = clientLookup[folderName.toLowerCase()];
+        final displayName = (matched != null && matched.businessName.trim().isNotEmpty)
+            ? matched.businessName.trim()
+            : folderName;
+        return displayName.toLowerCase().contains(filterNorm) ||
+            folderName.toLowerCase().contains(filterNorm);
+      }).toList();
+
+      Future<void> scanClientFolder(drive.File clientFolder) async {
+        final folderId = clientFolder.id;
+        final folderName = (clientFolder.name ?? '').trim();
+        if (folderId == null || folderName.isEmpty) return;
+
+        final matchedClient = clientLookup[folderName.toLowerCase()];
+        final canonicalClientName = (matchedClient != null && matchedClient.businessName.trim().isNotEmpty)
+            ? matchedClient.businessName.trim()
+            : folderName;
+        final clientPhone = matchedClient?.phone ?? '';
+        final clientEmail = matchedClient?.email ?? '';
+
+        try {
+          final subFolders = await _listDriveFoldersPaginated(api, folderId);
+          final certFolders = subFolders
+              .where((sf) => sf.id != null && CertificateModel.isCertificateFolderName(sf.name ?? ''))
+              .toList();
+          if (certFolders.isEmpty) return;
+
+          for (final certFolder in certFolders) {
+            final certFolderId = certFolder.id!;
+            final children = await _listDriveItemsPaginated(api, certFolderId);
+
+            void addDrivePdf(drive.File pdf, String parentId, {String subfolderLabel = ''}) {
+              final pdfId = pdf.id;
+              if (pdfId == null || pdfId.isEmpty) return;
+              final pdfName = (pdf.name ?? 'Certificado.pdf').trim();
+              final created = (pdf.createdTime ?? DateTime.now()).toLocal();
+              final modified = pdf.modifiedTime?.toLocal();
+              final added = CertificateModel.computeEffectiveAddedTime(
+                createdTime: created,
+                modifiedTime: modified,
+              );
+
+              certsMap[pdfId] = CertificateModel(
+                id: pdfId,
+                pdfName: pdfName,
+                clientName: canonicalClientName,
+                clientPhone: clientPhone,
+                clientEmail: clientEmail,
+                createdTime: created,
+                modifiedTime: modified,
+                addedTime: added,
+                pdfWebViewLink: pdf.webViewLink,
+                parentFolderId: parentId,
+                subfolderName: subfolderLabel,
+                fileSize: pdf.size != null ? (int.tryParse(pdf.size!) ?? 0) : 0,
+              );
+            }
+
+            // 1. PDFs directamente dentro de Certificados
+            for (final item in children) {
+              if (item.mimeType != 'application/vnd.google-apps.folder' && _isPdfDriveFile(item)) {
+                addDrivePdf(item, certFolderId);
+              }
+            }
+
+            // 2. Si el cliente tenía subcarpetas por año/mes dentro de Certificados, escanear 1 nivel más
+            final nestedSubfolders = children
+                .where((item) => item.id != null && item.mimeType == 'application/vnd.google-apps.folder')
+                .toList();
+            for (final nested in nestedSubfolders) {
+              try {
+                final nestedItems = await _listDriveItemsPaginated(api, nested.id!);
+                for (final item in nestedItems) {
+                  if (item.mimeType != 'application/vnd.google-apps.folder' && _isPdfDriveFile(item)) {
+                    addDrivePdf(item, nested.id!, subfolderLabel: (nested.name ?? '').trim());
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (e) {
+          debugPrint('Error escaneando certificados de $canonicalClientName: $e');
+        }
+      }
+
+      // Ejecutar en lotes de 8 carpetas para mantener velocidad sin saturar cuotas de Drive API
+      const int batchSize = 8;
+      for (int i = 0; i < targetFolders.length; i += batchSize) {
+        final end = (i + batchSize < targetFolders.length) ? i + batchSize : targetFolders.length;
+        final batch = targetFolders.sublist(i, end);
+        await Future.wait(batch.map(scanClientFolder));
+      }
+
+      final sortedResult = sortCertificates(certsMap.values.toList(), newestFirst: true);
+
+      if (clientFilter == null || clientFilter.trim().isEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(
+            _certificatesCacheKey,
+            jsonEncode(sortedResult.map((c) => c.toMap()).toList()),
+          );
+        } catch (_) {}
+      }
+
+      return sortedResult;
+    } catch (e) {
+      debugPrint('Error listando certificados en Drive: $e');
+      return await getCachedCertificates();
+    }
+  }
+
+  /// Descarga el PDF del certificado desde Google Drive a caché temporal local (con ID único para evitar colisiones).
+  Future<File?> downloadCertificatePdf(CertificateModel certificate) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final cacheDir = Directory('${tempDir.path}/ej_certificados_cache');
+      if (!cacheDir.existsSync()) {
+        cacheDir.createSync(recursive: true);
+      }
+
+      final safeId = certificate.id.replaceAll(RegExp(r'[^\w-]'), '_');
+      final cleanName = certificate.pdfName.replaceAll(RegExp(r'[^\w.-]'), '_');
+      final localFile = File('${cacheDir.path}/${safeId}_$cleanName');
+
+      bool isValidLocalPdf() {
+        if (!localFile.existsSync() || localFile.lengthSync() <= 100) return false;
+        if (certificate.fileSize > 0 && localFile.lengthSync() != certificate.fileSize) return false;
+        try {
+          final raf = localFile.openSync();
+          try {
+            final header = raf.readSync(4);
+            return header.length == 4 &&
+                header[0] == 0x25 &&
+                header[1] == 0x50 &&
+                header[2] == 0x44 &&
+                header[3] == 0x46;
+          } finally {
+            raf.closeSync();
+          }
+        } catch (_) {
+          return false;
+        }
+      }
+
+      if (isValidLocalPdf()) {
+        return localFile;
+      }
+
+      final api = await _getDriveApi();
+      if (api == null) {
+        return (localFile.existsSync() && localFile.lengthSync() > 100) ? localFile : null;
+      }
+
+      final media = await api.files.get(
+        certificate.id,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      ) as drive.Media;
+
+      final sink = localFile.openWrite();
+      await media.stream.pipe(sink);
+      await sink.close();
+
+      if (!localFile.existsSync() || localFile.lengthSync() <= 100) {
+        return null;
+      }
+      return localFile;
+    } catch (e) {
+      debugPrint('Error descargando PDF de certificado: $e');
       return null;
     }
   }

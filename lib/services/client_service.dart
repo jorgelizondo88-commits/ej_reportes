@@ -63,6 +63,7 @@ class ClientService {
             : clientToSave.contactName.trim();
         await GoogleDriveSyncService().getOrCreateClientFolderShareLink(folderName);
         await GoogleDriveSyncService().ensureInvoiceFoldersExist(folderName);
+        await GoogleDriveSyncService().ensureCertificateFolderExist(folderName);
         if (syncMasterBackup) {
           return await GoogleDriveSyncService().saveAndSyncMasterBackup();
         }

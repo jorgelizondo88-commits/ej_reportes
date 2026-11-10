@@ -21,6 +21,7 @@ import '../layouts/trap_layouts_history_screen.dart';
 import '../layouts/trap_layout_canvas_screen.dart';
 import '../cloud/google_drive_sync_screen.dart';
 import '../invoices/invoices_hub_screen.dart';
+import '../certificates/certificates_hub_screen.dart';
 
 class MainHubScreen extends StatefulWidget {
   const MainHubScreen({super.key});
@@ -36,6 +37,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
   int _scheduleCount = 0;
   int _contractCount = 0;
   int _layoutCount = 0;
+  int _certificateCount = 0;
 
   @override
   void initState() {
@@ -62,6 +64,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
     final contractsList = (rawContracts != null && rawContracts.isNotEmpty) ? jsonDecode(rawContracts) : [];
 
     final layoutsList = await TrapLayoutService().getAllLayouts();
+    final cachedCerts = await GoogleDriveSyncService().getCachedCertificates();
 
     if (mounted) {
       setState(() {
@@ -71,6 +74,7 @@ class _MainHubScreenState extends State<MainHubScreen> {
         _scheduleCount = schedulesList.length;
         _contractCount = contractsList.length;
         _layoutCount = layoutsList.length;
+        _certificateCount = cachedCerts.length;
       });
     }
 
@@ -324,6 +328,25 @@ class _MainHubScreenState extends State<MainHubScreen> {
                     context,
                     MaterialPageRoute(builder: (context) => const InvoicesHubScreen(initialTab: 0)),
                   );
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 4B. Tarjeta CERTIFICADOS DE FUMIGACIÓN
+              _moduleCard(
+                icon: Icons.verified_outlined,
+                iconColor: const Color(0xFF0F766E),
+                badgeText: _certificateCount > 0 ? '$_certificateCount en Drive' : 'Certificados PDF',
+                badgeColor: const Color(0xFF0F766E),
+                title: 'Certificados de Fumigación',
+                subtitle: 'Visualiza los certificados PDF agregados manualmente en la carpeta "Certificados" de cada cliente en Google Drive, ordenados por fecha de ingreso.',
+                primaryButtonText: 'Ver Certificados',
+                onPrimaryPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const CertificatesHubScreen()),
+                  );
+                  _loadMetrics();
                 },
               ),
               const SizedBox(height: 14),

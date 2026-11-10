@@ -5,6 +5,7 @@ import '../../services/client_service.dart';
 import '../../services/google_drive_sync_service.dart';
 import '../cloud/google_drive_sync_screen.dart';
 import '../invoices/invoices_hub_screen.dart';
+import '../certificates/certificates_hub_screen.dart';
 import '../quotes/quote_form_screen.dart';
 
 class ClientsDirectoryScreen extends StatefulWidget {
@@ -510,6 +511,25 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                                   MaterialPageRoute(
                                     builder: (context) => InvoicesHubScreen(
                                       initialClientFilter: c.businessName,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                side: const BorderSide(color: Color(0xFF0F766E)),
+                                foregroundColor: const Color(0xFF0F766E),
+                              ),
+                              icon: const Icon(Icons.verified_outlined, size: 16),
+                              label: const Text('Certificados', style: TextStyle(fontSize: 12)),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => CertificatesHubScreen(
+                                      initialClientFilter: title,
                                     ),
                                   ),
                                 );

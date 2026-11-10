@@ -312,6 +312,80 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
     }
   }
 
+  Future<void> _createAllCertificateFolders() async {
+    if (!_driveService.isSignedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor inicia sesión con Google primero.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSyncingAll = true;
+      _syncProgress = 0.05;
+      _syncStatusText = 'Creando carpeta "Certificados" para todos los clientes...';
+    });
+
+    final count = await _driveService.ensureCertificateFoldersForAllClients(
+      onProgress: (status, progress) {
+        if (mounted) {
+          setState(() {
+            _syncStatusText = status;
+            _syncProgress = progress;
+          });
+        }
+      },
+    );
+
+    if (mounted) {
+      setState(() => _isSyncingAll = false);
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.verified_outlined, color: Color(0xFF0F766E)),
+              SizedBox(width: 8),
+              Text('¡Carpetas Creadas!'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Se preparó la carpeta "Certificados" en Google Drive para $count cliente(s):'),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.teal.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.teal.shade200),
+                ),
+                child: const Text(
+                  '📁 Clientes\n └── 📁 [Nombre del Cliente]\n        └── 📁 Certificados',
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 11.5, height: 1.4),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Ahora puedes arrastrar tus certificados en PDF dentro de "Certificados" y verlos ordenados por fecha de ingreso directamente en la app.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Excelente'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _backupDatabase() async {
     setState(() => _isLoading = true);
     final ok = await _driveService.saveAndSyncMasterBackup();
@@ -583,6 +657,14 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
                       ),
                       const Divider(height: 1),
                       ListTile(
+                        leading: const CircleAvatar(backgroundColor: Color(0xFFCCFBF1), child: Icon(Icons.verified_outlined, color: Color(0xFF0F766E))),
+                        title: const Text('Crear Carpetas "Certificados" para Todos los Clientes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                        subtitle: const Text('Genera la carpeta "Certificados" en Drive dentro de cada cliente (sin duplicar si ya existe).', style: TextStyle(fontSize: 11.5)),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: _isSyncingAll ? null : _createAllCertificateFolders,
+                      ),
+                      const Divider(height: 1),
+                      ListTile(
                         leading: const CircleAvatar(backgroundColor: Color(0xFFFEF3C7), child: Icon(Icons.restore, color: Color(0xFF92400E))),
                         title: const Text('Restaurar Datos desde la Nube', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
                         subtitle: const Text('Descarga todos tus clientes y reportes en un teléfono nuevo o secundario.', style: TextStyle(fontSize: 11.5)),
@@ -668,10 +750,11 @@ class _GoogleDriveSyncScreenState extends State<GoogleDriveSyncScreen> {
                         '                 ├── 📁 2_Cotizaciones\n'
                         '                 ├── 📁 3_Contratos\n'
                         '                 ├── 📁 4_Planos_y_Layouts\n'
-                        '                 └── 📁 5_Facturas\n'
-                        '                        ├── 📁 Pendientes_de_Pago\n'
-                        '                        ├── 📁 Pagadas\n'
-                        '                        └── 📁 Canceladas',
+                        '                 ├── 📁 5_Facturas\n'
+                        '                 │      ├── 📁 Pendientes_de_Pago\n'
+                        '                 │      ├── 📁 Pagadas\n'
+                        '                 │      └── 📁 Canceladas\n'
+                        '                 └── 📁 Certificados  (PDFs de fumigación)',
                         style: TextStyle(fontFamily: 'monospace', fontSize: 11.5, color: Color(0xFF1E293B)),
                       ),
                       const SizedBox(height: 8),

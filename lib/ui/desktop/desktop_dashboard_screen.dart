@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/certificate_model.dart';
 import '../../models/invoice_model.dart';
 import '../../services/client_service.dart';
 import '../../services/google_drive_sync_service.dart';
@@ -49,6 +51,15 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
   InvoiceModel? _selectedInvoice;
   File? _selectedInvoiceFile;
   bool _isLoadingInvoiceFile = false;
+
+  List<CertificateModel> _certificates = [];
+  CertificateModel? _selectedCertificate;
+  File? _selectedCertificateFile;
+  bool _isLoadingCertificateFile = false;
+  bool _isRefreshingCertificates = false;
+  bool _isCreatingCertFolders = false;
+  String? _selectedCertificateClientFilter;
+  bool _sortCertificatesNewestFirst = true;
 
   final GoogleDriveSyncService _driveService = GoogleDriveSyncService();
   final TextEditingController _searchCtrl = TextEditingController();
@@ -251,6 +262,110 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
     }
   }
 
+  Future<void> _onSelectCertificate(CertificateModel cert) async {
+    setState(() {
+      _selectedCertificate = cert;
+      _selectedCertificateFile = null;
+      _isLoadingCertificateFile = true;
+    });
+    try {
+      final file = await _driveService.downloadCertificatePdf(cert);
+      if (mounted && _selectedCertificate?.id == cert.id) {
+        setState(() {
+          _selectedCertificateFile = file;
+          _isLoadingCertificateFile = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && _selectedCertificate?.id == cert.id) {
+        setState(() {
+          _isLoadingCertificateFile = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshCertificatesOnly() async {
+    if (_isRefreshingCertificates) return;
+    setState(() => _isRefreshingCertificates = true);
+    try {
+      if (!_driveService.isSignedIn) {
+        await _driveService.initSilently();
+      }
+      if (_driveService.isSignedIn) {
+        final fresh = await _driveService.fetchCertificates();
+        if (mounted) {
+          setState(() {
+            _certificates = fresh;
+            if (fresh.isNotEmpty) {
+              if (_selectedCertificate == null) {
+                _onSelectCertificate(fresh.first);
+              } else {
+                final idx = fresh.indexWhere((c) => c.id == _selectedCertificate!.id);
+                if (idx >= 0) {
+                  _selectedCertificate = fresh[idx];
+                } else {
+                  _onSelectCertificate(fresh.first);
+                }
+              }
+            } else {
+              _selectedCertificate = null;
+              _selectedCertificateFile = null;
+            }
+          });
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isRefreshingCertificates = false);
+    }
+  }
+
+  Future<void> _createAllCertificateFoldersDesktop() async {
+    if (!_driveService.isSignedIn) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Conecta Google Drive primero en "Nube Google Drive".')),
+      );
+      return;
+    }
+    setState(() => _isCreatingCertFolders = true);
+    try {
+      final count = await _driveService.ensureCertificateFoldersForAllClients();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡Carpeta "Certificados" preparada en Drive para $count cliente(s)!'),
+            backgroundColor: const Color(0xFF0F766E),
+          ),
+        );
+      }
+      await _refreshCertificatesOnly();
+    } finally {
+      if (mounted) setState(() => _isCreatingCertFolders = false);
+    }
+  }
+
+  Future<void> _shareCertificateDesktop(CertificateModel cert) async {
+    final message =
+        'Estimado cliente de *${cert.clientName}*, le compartimos su Certificado de Fumigación (*${cert.title}*) emitido por EJ Exterminadores. ¡Quedamos a sus órdenes!';
+    final file = _selectedCertificate?.id == cert.id ? _selectedCertificateFile : null;
+
+    if (file != null && file.existsSync()) {
+      try {
+        await Share.shareXFiles(
+          [XFile(file.path, name: cert.pdfName)],
+          text: message,
+          subject: 'Certificado de Fumigación - ${cert.clientName}',
+        );
+        return;
+      } catch (_) {}
+    }
+
+    final msgEncoded = Uri.encodeComponent(message.replaceAll('*', ''));
+    final phone = cert.clientPhone.replaceAll(RegExp(r'\D'), '');
+    final url = phone.isNotEmpty ? 'https://wa.me/52$phone?text=$msgEncoded' : 'https://wa.me/?text=$msgEncoded';
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -289,13 +404,15 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
     final rawContracts = prefs.getString('ej_contracts_history_list');
     final contractsList = (rawContracts != null && rawContracts.isNotEmpty) ? jsonDecode(rawContracts) : [];
 
-    // 5. Facturas desde caché local primero para rapidez inmediata
+    // 5. Facturas y Certificados desde caché local primero para rapidez inmediata
     final cachedInvoices = await _driveService.getCachedInvoices();
     final pendingInvs = cachedInvoices.where((i) => i.status == 'pending').toList();
+    final cachedCertificates = await _driveService.getCachedCertificates();
 
     if (mounted) {
       Map<String, dynamic>? reportToLoad;
       Map<String, dynamic>? quoteToLoad;
+      CertificateModel? certToLoad;
 
       setState(() {
         _clientCount = clients.length;
@@ -307,6 +424,7 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         _quotes = quotesList;
         _invoices = cachedInvoices;
         _pendingInvoiceCount = pendingInvs.length;
+        _certificates = cachedCertificates;
 
         if (_reports.isNotEmpty) {
           if (_selectedReport == null) {
@@ -353,12 +471,31 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
           final pending = _invoices.where((i) => i.status == 'pending').toList();
           _selectedInvoice = pending.isNotEmpty ? pending.first : _invoices.first;
         }
+
+        if (_certificates.isNotEmpty) {
+          if (_selectedCertificate == null) {
+            _selectedCertificate = _certificates.first;
+          } else {
+            final idx = _certificates.indexWhere((c) => c.id == _selectedCertificate!.id);
+            _selectedCertificate = idx >= 0 ? _certificates[idx] : _certificates.first;
+          }
+          if (!syncFromCloud &&
+              _selectedModuleIndex == 10 &&
+              (_selectedCertificateFile == null || !_selectedCertificateFile!.existsSync())) {
+            certToLoad = _selectedCertificate;
+          }
+        } else {
+          _selectedCertificate = null;
+          _selectedCertificateFile = null;
+        }
       });
 
       if (reportToLoad != null) {
         _onSelectReport(reportToLoad!);
       } else if (quoteToLoad != null) {
         _onSelectQuote(quoteToLoad!);
+      } else if (certToLoad != null) {
+        _onSelectCertificate(certToLoad!);
       }
     }
 
@@ -371,9 +508,15 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         }
 
         if (_driveService.isSignedIn) {
-          // Refrescar facturas en segundo plano
-          final freshInvoices = await _driveService.fetchInvoices();
+          // Refrescar facturas y certificados en paralelo en segundo plano
+          final driveResults = await Future.wait([
+            _driveService.fetchInvoices(),
+            _driveService.fetchCertificates(),
+          ]);
+          final freshInvoices = driveResults[0] as List<InvoiceModel>;
+          final freshCertificates = driveResults[1] as List<CertificateModel>;
           if (mounted) {
+            CertificateModel? certToAutoDownload;
             setState(() {
               _invoices = freshInvoices;
               final freshPending = freshInvoices.where((i) => i.status == 'pending').toList();
@@ -388,7 +531,27 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                   }
                 }
               }
+
+              _certificates = freshCertificates;
+              if (freshCertificates.isNotEmpty) {
+                if (_selectedCertificate == null) {
+                  _selectedCertificate = freshCertificates.first;
+                } else {
+                  final idx = freshCertificates.indexWhere((c) => c.id == _selectedCertificate!.id);
+                  _selectedCertificate = idx >= 0 ? freshCertificates[idx] : freshCertificates.first;
+                }
+                if (_selectedModuleIndex == 10 &&
+                    (_selectedCertificateFile == null || !_selectedCertificateFile!.existsSync())) {
+                  certToAutoDownload = _selectedCertificate;
+                }
+              } else {
+                _selectedCertificate = null;
+                _selectedCertificateFile = null;
+              }
             });
+            if (certToAutoDownload != null) {
+              _onSelectCertificate(certToAutoDownload!);
+            }
           }
 
           // Sincronización bidireccional segura (cola pendiente + Copia Maestra + archivos en Drive), sin bucle recursivo
@@ -507,6 +670,14 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                   badge: _pendingInvoiceCount > 0 ? '$_pendingInvoiceCount cobros' : null,
                   badgeColor: const Color(0xFFE11D48),
                   iconColor: const Color(0xFF6EE7B7),
+                ),
+                _sidebarItem(
+                  10,
+                  Icons.verified_outlined,
+                  'Certificados',
+                  badge: _certificates.isNotEmpty ? '${_certificates.length}' : null,
+                  badgeColor: const Color(0xFF0F766E),
+                  iconColor: const Color(0xFF5EEAD4),
                 ),
                 _sidebarItem(4, Icons.picture_as_pdf_outlined, 'Cronogramas (PDF)'),
                 _sidebarItem(5, Icons.draw_outlined, 'Pólizas y Contratos', badge: '$_contractCount'),
@@ -631,6 +802,10 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
             } else {
               _selectedInvoice = null;
               _selectedInvoiceFile = null;
+            }
+          } else if (index == 10 && _selectedCertificate != null) {
+            if (_selectedCertificateFile == null || !_selectedCertificateFile!.existsSync()) {
+              _onSelectCertificate(_selectedCertificate!);
             }
           }
         },
@@ -789,6 +964,8 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
         return const ScheduleHistoryScreen(initialTab: 0);
       case 3:
         return _buildSplitInvoicesView();
+      case 10:
+        return _buildSplitCertificatesView();
       case 4:
         return const ScheduleHistoryScreen(initialTab: 2);
       case 5:
@@ -1619,6 +1796,487 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                                             onPressed: () {
                                               if (_selectedInvoice != null) {
                                                 _onSelectInvoice(_selectedInvoice!);
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- VISTA DIVIDIDA: CERTIFICADOS DE FUMIGACIÓN ---
+  Widget _buildSplitCertificatesView() {
+    final clientNames = <String>{};
+    for (final c in _certificates) {
+      final name = c.clientName.trim();
+      if (name.isNotEmpty) clientNames.add(name);
+    }
+    final sortedClients = clientNames.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final effectiveClientFilter =
+        (_selectedCertificateClientFilter != null && sortedClients.contains(_selectedCertificateClientFilter))
+            ? _selectedCertificateClientFilter
+            : null;
+
+    final filtered = _certificates.where((cert) {
+      if (effectiveClientFilter != null && effectiveClientFilter.isNotEmpty) {
+        if (cert.clientName.trim().toLowerCase() != effectiveClientFilter.trim().toLowerCase()) {
+          return false;
+        }
+      }
+      if (_searchFilter.isEmpty) return true;
+      return cert.clientName.toLowerCase().contains(_searchFilter) ||
+          cert.title.toLowerCase().contains(_searchFilter) ||
+          cert.pdfName.toLowerCase().contains(_searchFilter) ||
+          cert.subfolderName.toLowerCase().contains(_searchFilter);
+    }).toList();
+
+    final sortedFiltered = _driveService.sortCertificates(
+      filtered,
+      newestFirst: _sortCertificatesNewestFirst,
+    );
+    final dateFmt = DateFormat('dd/MM/yyyy • HH:mm');
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 400,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Encabezado con orden y actualización
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8FAFC),
+                    border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_outlined, size: 17, color: Color(0xFF0F766E)),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Certificados en Drive',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: () => setState(() => _sortCertificatesNewestFirst = !_sortCertificatesNewestFirst),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDFA),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFF99F6E4)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.swap_vert, size: 13, color: Color(0xFF0F766E)),
+                              const SizedBox(width: 3),
+                              Text(
+                                _sortCertificatesNewestFirst ? 'Recientes' : 'Antiguos',
+                                style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF0F766E)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _isRefreshingCertificates
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F766E)),
+                            )
+                          : IconButton(
+                              icon: const Icon(Icons.refresh, size: 17, color: Color(0xFF0F2B48)),
+                              tooltip: 'Actualizar certificados desde Google Drive',
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: _refreshCertificatesOnly,
+                            ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${sortedFiltered.length}',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Filtro por Cliente + botón crear carpetas Certificados
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF1F5F9),
+                    border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.people_alt_outlined, size: 16, color: Color(0xFF0F2B48)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String?>(
+                            value: effectiveClientFilter,
+                            isDense: true,
+                            isExpanded: true,
+                            hint: const Text('Filtrar por cliente...', style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
+                            items: [
+                              const DropdownMenuItem<String?>(
+                                value: null,
+                                child: Text('Todos los clientes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+                              ),
+                              ...sortedClients.map((c) => DropdownMenuItem<String?>(
+                                    value: c,
+                                    child: Text(c, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                                  )),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedCertificateClientFilter = val;
+                                final matches = _certificates.where((cert) {
+                                  if (val != null && cert.clientName.trim().toLowerCase() != val.trim().toLowerCase()) {
+                                    return false;
+                                  }
+                                  return true;
+                                }).toList();
+                                final ordered = _driveService.sortCertificates(matches, newestFirst: _sortCertificatesNewestFirst);
+                                if (ordered.isNotEmpty && (_selectedCertificate == null || !ordered.any((c) => c.id == _selectedCertificate!.id))) {
+                                  _onSelectCertificate(ordered.first);
+                                }
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                      if (effectiveClientFilter != null) ...[
+                        IconButton(
+                          icon: const Icon(Icons.cancel, size: 16, color: Colors.grey),
+                          tooltip: 'Mostrar todos',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => setState(() => _selectedCertificateClientFilter = null),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Tooltip(
+                        message: 'Crear carpeta "Certificados" en Drive para todos los clientes',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: _isCreatingCertFolders ? null : _createAllCertificateFoldersDesktop,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                            ),
+                            child: _isCreatingCertFolders
+                                ? const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F766E)),
+                                  )
+                                : const Icon(Icons.create_new_folder_outlined, size: 15, color: Color(0xFF0F766E)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Lista de Certificados
+                Expanded(
+                  child: sortedFiltered.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _driveService.isSignedIn ? Icons.verified_outlined : Icons.cloud_off_outlined,
+                                  size: 42,
+                                  color: Colors.black26,
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  !_driveService.isSignedIn
+                                      ? 'Conecta tu cuenta en "Nube Google Drive" para leer los certificados.'
+                                      : _certificates.isEmpty
+                                          ? 'No se encontraron PDFs en carpetas "Certificados" de Google Drive.\n\nSube tus PDFs a Clientes / [Cliente] / Certificados y presiona Actualizar.'
+                                          : 'No hay certificados que coincidan con el filtro.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 12, color: Colors.black54, height: 1.4),
+                                ),
+                                if (_driveService.isSignedIn && _certificates.isEmpty) ...[
+                                  const SizedBox(height: 14),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF0F766E),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    icon: const Icon(Icons.create_new_folder_outlined, size: 15),
+                                    label: const Text('Crear carpetas "Certificados"', style: TextStyle(fontSize: 11.5)),
+                                    onPressed: _isCreatingCertFolders ? null : _createAllCertificateFoldersDesktop,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: sortedFiltered.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                          itemBuilder: (context, i) {
+                            final cert = sortedFiltered[i];
+                            final isSel = _selectedCertificate != null && _selectedCertificate!.id == cert.id;
+                            return ListTile(
+                              dense: true,
+                              selected: isSel,
+                              selectedTileColor: const Color(0xFFE0F2FE),
+                              leading: Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDFA),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF99F6E4)),
+                                ),
+                                child: const Icon(Icons.verified_outlined, size: 17, color: Color(0xFF0F766E)),
+                              ),
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      cert.clientName,
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (cert.subfolderName.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        cert.subfolderName,
+                                        style: const TextStyle(fontSize: 9.5, color: Color(0xFF475569), fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    cert.pdfName,
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF334155)),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.schedule, size: 11, color: Color(0xFF0F766E)),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Agregado: ${dateFmt.format(cert.addedTime)}',
+                                        style: const TextStyle(fontSize: 10, color: Color(0xFF0F766E), fontWeight: FontWeight.w600),
+                                      ),
+                                      if (cert.formattedFileSize.isNotEmpty) ...[
+                                        const Spacer(),
+                                        Text(
+                                          cert.formattedFileSize,
+                                          style: const TextStyle(fontSize: 9.5, color: Color(0xFF64748B)),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              onTap: () => _onSelectCertificate(cert),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // Lado Derecho: Visor PDF de Certificados
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: _selectedCertificate == null
+                  ? const Center(
+                      child: Text(
+                        'Selecciona un certificado para visualizar',
+                        style: TextStyle(color: Colors.black45),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF8FAFC),
+                            border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedCertificate!.clientName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${_selectedCertificate!.pdfName} • Agregado: ${dateFmt.format(_selectedCertificate!.addedTime)}${_selectedCertificate!.formattedFileSize.isNotEmpty ? ' (${_selectedCertificate!.formattedFileSize})' : ''}',
+                                      style: const TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF25D366),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    icon: const Icon(Icons.share, size: 14),
+                                    label: const Text('Enviar / WhatsApp', style: TextStyle(fontSize: 11)),
+                                    onPressed: () => _shareCertificateDesktop(_selectedCertificate!),
+                                  ),
+                                  if (_selectedCertificateFile != null && _selectedCertificateFile!.existsSync())
+                                    OutlinedButton.icon(
+                                      icon: const Icon(Icons.print, size: 14),
+                                      label: const Text('Imprimir', style: TextStyle(fontSize: 11)),
+                                      onPressed: () => Printing.layoutPdf(
+                                        onLayout: (format) => _selectedCertificateFile!.readAsBytes(),
+                                      ),
+                                    ),
+                                  if (_selectedCertificate!.pdfWebViewLink != null && _selectedCertificate!.pdfWebViewLink!.isNotEmpty)
+                                    OutlinedButton.icon(
+                                      icon: const Icon(Icons.open_in_new, size: 14),
+                                      label: const Text('Drive', style: TextStyle(fontSize: 11)),
+                                      onPressed: () => launchUrl(
+                                        Uri.parse(_selectedCertificate!.pdfWebViewLink!),
+                                        mode: LaunchMode.externalApplication,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: _isLoadingCertificateFile
+                              ? Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox(
+                                        width: 36,
+                                        height: 36,
+                                        child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFF0F766E)),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'Descargando ${_selectedCertificate!.pdfName} desde Google Drive...',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48)),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      const Text(
+                                        'Se abrirá automáticamente al terminar.',
+                                        style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : (_selectedCertificateFile != null && _selectedCertificateFile!.existsSync())
+                                  ? PdfPreview(
+                                      key: ValueKey('cert-${_selectedCertificate!.id}-${_selectedCertificateFile!.path}-${_selectedCertificateFile!.lengthSync()}'),
+                                      build: (format) => _selectedCertificateFile!.readAsBytes(),
+                                      allowPrinting: true,
+                                      allowSharing: false,
+                                      canChangeOrientation: false,
+                                      canChangePageFormat: false,
+                                      onError: (context, error) => Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.error_outline, size: 42, color: Colors.redAccent),
+                                            const SizedBox(height: 10),
+                                            Text('No se pudo renderizar el certificado: $error', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.cloud_off_outlined, size: 48, color: Color(0xFF94A3B8)),
+                                          const SizedBox(height: 10),
+                                          const Text(
+                                            'No se pudo descargar el certificado desde Google Drive.',
+                                            style: TextStyle(fontSize: 12, color: Colors.black54),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF0F766E),
+                                              foregroundColor: Colors.white,
+                                            ),
+                                            icon: const Icon(Icons.refresh, size: 16),
+                                            label: const Text('Reintentar descarga'),
+                                            onPressed: () {
+                                              if (_selectedCertificate != null) {
+                                                _onSelectCertificate(_selectedCertificate!);
                                               }
                                             },
                                           ),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ej_reportes/models/certificate_model.dart';
 import 'package:ej_reportes/models/client_model.dart';
 import 'package:ej_reportes/models/cloud_sync_item_model.dart';
 import 'package:ej_reportes/services/google_drive_sync_service.dart';
@@ -352,5 +353,91 @@ void main() {
     } finally {
       if (tempRoot.existsSync()) tempRoot.deleteSync(recursive: true);
     }
+  });
+
+  test('CertificateModel reconoce carpetas de certificados y calcula addedTime correctamente', () {
+    expect(CertificateModel.isCertificateFolderName('Certificados'), true);
+    expect(CertificateModel.isCertificateFolderName('Certificados de Fumigación'), true);
+    expect(CertificateModel.isCertificateFolderName('6_Certificados'), true);
+    expect(CertificateModel.isCertificateFolderName('  certificado '), true);
+    expect(CertificateModel.isCertificateFolderName('5_Facturas'), false);
+    expect(CertificateModel.isCertificateFolderName(''), false);
+
+    // Caso 1: Archivo PDF viejo en PC subido hoy a Drive -> createdTime es mayor que modifiedTime
+    final uploadDate = DateTime.utc(2026, 11, 9, 18, 30);
+    final oldLocalModified = DateTime.utc(2026, 8, 15, 10, 0);
+    final uploadedAdded = CertificateModel.computeEffectiveAddedTime(
+      createdTime: uploadDate,
+      modifiedTime: oldLocalModified,
+    );
+    expect(uploadedAdded, uploadDate.toLocal());
+
+    // Caso 2: Archivo en Drive movido o reemplazado posteriormente -> modifiedTime es mayor
+    final replacedDate = DateTime.utc(2026, 11, 10, 14, 0);
+    final replacedAdded = CertificateModel.computeEffectiveAddedTime(
+      createdTime: uploadDate,
+      modifiedTime: replacedDate,
+    );
+    expect(replacedAdded, replacedDate.toLocal());
+
+    // Serialización y tamaño
+    final cert = CertificateModel(
+      id: 'cert_001',
+      pdfName: 'Certificado_Noviembre_2026.pdf',
+      clientName: 'Hotel Monterrey',
+      clientPhone: '8112345678',
+      createdTime: uploadDate,
+      modifiedTime: oldLocalModified,
+      parentFolderId: 'folder_cert_1',
+      subfolderName: '2026',
+      fileSize: 2048,
+    );
+    expect(cert.title, 'Certificado Noviembre 2026');
+    expect(cert.formattedFileSize, '2.0 KB');
+
+    final restored = CertificateModel.fromMap(cert.toMap());
+    expect(restored.id, 'cert_001');
+    expect(restored.clientName, 'Hotel Monterrey');
+    expect(restored.subfolderName, '2026');
+    expect(restored.addedTime, uploadDate.toLocal());
+  });
+
+  test('GoogleDriveSyncService ordena y recupera certificados cacheados por fecha de ingreso', () async {
+    final cOld = CertificateModel(
+      id: 'c_old',
+      pdfName: 'Cert_Enero.pdf',
+      clientName: 'Cliente A',
+      createdTime: DateTime(2026, 1, 15, 9, 0),
+      parentFolderId: 'p1',
+    );
+    final cMid = CertificateModel(
+      id: 'c_mid',
+      pdfName: 'Cert_Junio.pdf',
+      clientName: 'Cliente B',
+      createdTime: DateTime(2026, 6, 20, 11, 30),
+      parentFolderId: 'p2',
+    );
+    final cNew = CertificateModel(
+      id: 'c_new',
+      pdfName: 'Cert_Noviembre.pdf',
+      clientName: 'Cliente C',
+      createdTime: DateTime(2026, 11, 9, 16, 45),
+      parentFolderId: 'p3',
+    );
+
+    SharedPreferences.setMockInitialValues({
+      'ej_cached_certificates': jsonEncode([
+        cOld.toMap(),
+        cNew.toMap(),
+        cMid.toMap(),
+      ]),
+    });
+
+    final service = GoogleDriveSyncService();
+    final cachedNewest = await service.getCachedCertificates();
+    expect(cachedNewest.map((c) => c.id).toList(), ['c_new', 'c_mid', 'c_old']);
+
+    final oldestFirst = service.sortCertificates(cachedNewest, newestFirst: false);
+    expect(oldestFirst.map((c) => c.id).toList(), ['c_old', 'c_mid', 'c_new']);
   });
 }
