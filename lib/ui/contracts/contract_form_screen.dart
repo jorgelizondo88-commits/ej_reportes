@@ -1260,7 +1260,7 @@ class _ContractFormScreenState extends State<ContractFormScreen> {
                     const SizedBox(height: 6),
                     _signatureBox(
                       bytes: _contractorSignatureBytes,
-                      signerTitle: 'Ing. Jorge Elizondo / Representante Técnico',
+                      signerTitle: 'Jorge Alberto Elizondo Juarez (RFC: EIJJ880119CM7)',
                       hintText: 'Tocar para firmar o usar firma registrada',
                       onTap: () {
                         _openSignatureDialog(

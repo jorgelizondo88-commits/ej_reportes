@@ -179,7 +179,7 @@ class ContractPdfService {
                 border: pw.Border.all(color: borderColor, width: 0.6),
               ),
               child: pw.Text(
-                'CONTRATO DE PRESTACIÓN DE SERVICIOS QUE CELEBRAN, POR UNA PARTE, "EJ EXTERMINADORES" (EN LO SUCESIVO "EL PRESTADOR"), Y POR LA OTRA PARTE, LA PERSONA FÍSICA O MORAL CUYOS DATOS SE IDENTIFICAN EN EL PRESENTE INSTRUMENTO (EN LO SUCESIVO "EL CLIENTE"), REPRESENTADA POR LA PERSONA CUYA IDENTIDAD Y FACULTADES CONSTAN EN EL PRESENTE DOCUMENTO, SUJETÁNDOSE AMBAS PARTES AL TENOR DE LAS SIGUIENTES DECLARACIONES Y CLÁUSULAS:',
+                'CONTRATO DE PRESTACIÓN DE SERVICIOS QUE CELEBRAN, POR UNA PARTE, JORGE ALBERTO ELIZONDO JUAREZ (PERSONA FÍSICA CON ACTIVIDAD EMPRESARIAL, R.F.C. EIJJ880119CM7), OPERANDO COMERCIALMENTE COMO "EJ EXTERMINADORES" (EN LO SUCESIVO "EL PRESTADOR"), Y POR LA OTRA PARTE, LA PERSONA FÍSICA O MORAL CUYOS DATOS SE IDENTIFICAN EN EL PRESENTE INSTRUMENTO (EN LO SUCESIVO "EL CLIENTE"), REPRESENTADA POR LA PERSONA CUYA IDENTIDAD Y FACULTADES CONSTAN EN EL PRESENTE DOCUMENTO, SUJETÁNDOSE AMBAS PARTES AL TENOR DE LAS SIGUIENTES DECLARACIONES Y CLÁUSULAS:',
                 textAlign: pw.TextAlign.justify,
                 style: const pw.TextStyle(fontSize: 7.8, color: darkText, lineSpacing: 1.15),
               ),
@@ -192,9 +192,9 @@ class ContractPdfService {
 
             _buildDeclarationItem(
               'I. Declara "EL PRESTADOR":',
-              'a) Ser una empresa formalmente establecida y dedicada profesionalmente al Control y Manejo Integrado de Plagas Urbanas, Comerciales e Industriales.\n'
-              'b) Contar con personal capacitado, equipo técnico adecuado y emplear exclusivamente insumos químicos y plaguicidas autorizados por la Secretaría de Salud (SSA) y la COFEPRIS.\n'
-              'c) Tener su domicilio operativo en Monterrey, Nuevo León, con línea de atención telefónica 813-175-9342 y sitio web oficial www.ejexterminadores.com.',
+              'a) Ser Persona Física con Actividad Empresarial debidamente inscrita ante el Servicio de Administración Tributaria (SAT) con R.F.C. EIJJ880119CM7, operando comercialmente bajo el nombre "EJ EXTERMINADORES", dedicada profesionalmente al Control y Manejo Integrado de Plagas Urbanas, Comerciales e Industriales.\n'
+              'b) Contar con equipo técnico adecuado y emplear exclusivamente insumos químicos y plaguicidas con registro sanitario vigente ante la Secretaría de Salud (SSA) y COFEPRIS, contando con alianza técnica y respaldo de Licencia Sanitaria para la emisión de certificados sanitarios cuando el servicio así lo requiera.\n'
+              'c) Tener su domicilio operativo y para oír y recibir notificaciones en el Área Metropolitana de Monterrey, Nuevo León, con línea telefónica 813-175-9342 y sitio web oficial www.ejexterminadores.com.',
             ),
             pw.SizedBox(height: 4),
 
@@ -270,20 +270,25 @@ class ContractPdfService {
               '"EL PRESTADOR" garantiza una reducción progresiva y el mantenimiento de niveles óptimos de bioseguridad en el inmueble. En caso de detectarse brotes o actividad imprevista de plaga dentro del periodo contractual, "EL PRESTADOR" realizará los refuerzos técnicos necesarios sin costo adicional, siempre que "EL CLIENTE" haya cumplido con las recomendaciones higiénicas y los días de exclusión señalados en los reportes.',
             ),
 
-            if (contract.specialClauses.isNotEmpty) ...[
+            _buildClause(
+              'SÉPTIMA. SUSPENSIÓN POR FALTA DE PAGO Y TERMINACIÓN ANTICIPADA.-',
+              'En caso de mora de dos (2) o más días hábiles posteriores a la fecha límite convenida, "EL PRESTADOR" podrá suspender temporalmente las visitas y la cobertura de garantía hasta la liquidación total del saldo vencido. Cualquiera de las partes podrá dar por terminado anticipadamente este contrato mediante aviso por escrito con al menos 15 días naturales de anticipación, obligándose "EL CLIENTE" a liquidar los servicios ejecutados y, en pólizas semestrales o anuales con tarifa preferencial, cubrir el ajuste a tarifa ordinaria por los servicios ya realizados.',
+            ),
+
+            if (contract.specialClauses.trim().isNotEmpty) ...[
               _buildClause(
-                'SÉPTIMA. ACUERDOS Y CONDICIONES ESPECIALES.-',
-                contract.specialClauses,
+                'OCTAVA. ACUERDOS Y CONDICIONES ESPECIALES.-',
+                contract.specialClauses.trim(),
               ),
             ],
 
             _buildClause(
-              'OCTAVA. VALIDEZ DE FIRMA ELECTRÓNICA Y NO REPUDIO.-',
+              '${contract.specialClauses.trim().isNotEmpty ? 'NOVENA' : 'OCTAVA'}. VALIDEZ DE FIRMA ELECTRÓNICA Y NO REPUDIO.-',
               'Las partes acuerdan y reconocen expresamente que el presente contrato, celebrado mediante dispositivos electrónicos y perfeccionado mediante la firma autógrafa digitalizada en pantalla y la captura de identificación oficial del representante, goza de plena validez jurídica, eficacia probatoria y obligatoriedad en términos de los Artículos 89, 89 bis, 90, 91 y 93 del Código de Comercio, así como del Artículo 1803 del Código Civil Federal.',
             ),
 
             _buildClause(
-              'NOVENA. JURISDICCIÓN Y COMPETENCIA.-',
+              '${contract.specialClauses.trim().isNotEmpty ? 'DÉCIMA' : 'NOVENA'}. JURISDICCIÓN Y COMPETENCIA.-',
               'Para la interpretación y cumplimiento del presente contrato, ambas partes se someten voluntariamente a las leyes aplicables y a la jurisdicción de los Tribunales Competentes de la ciudad de ${contract.jurisdiction}, renunciando a cualquier otro fuero que por razón de sus domicilios presentes o futuros pudiera corresponderles.',
             ),
             pw.SizedBox(height: 8),
@@ -420,12 +425,12 @@ class ContractPdfService {
                             ),
                             pw.SizedBox(height: 3),
                             pw.Text(
-                              'ING. JORGE ELIZONDO / REP. TÉCNICO',
+                              'JORGE ALBERTO ELIZONDO JUAREZ',
                               style: pw.TextStyle(fontSize: 8.0, fontWeight: pw.FontWeight.bold, color: darkText),
                               textAlign: pw.TextAlign.center,
                             ),
                             pw.Text(
-                              'Responsable de Operaciones y Servicios',
+                              'R.F.C. EIJJ880119CM7  |  Titular y Rep. Técnico',
                               style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
                               textAlign: pw.TextAlign.center,
                             ),
@@ -511,7 +516,7 @@ class ContractPdfService {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
-            'EJ Exterminadores   |   Contrato de Póliza #${contract.folio}   |   www.ejexterminadores.com',
+            'Jorge Alberto Elizondo Juarez (EJ Exterminadores)  |  RFC: EIJJ880119CM7  |  Póliza #${contract.folio}',
             style: const pw.TextStyle(fontSize: 6.8, color: PdfColors.grey700),
           ),
           pw.Text(

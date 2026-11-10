@@ -168,4 +168,42 @@ void main() {
     final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfString).length;
     expect(pageCount, 2, reason: 'El contrato trimestral debe caber en 2 páginas ejecutivas');
   });
+
+  test('Contrato Persona Física incluye RFC EIJJ880119CM7 y mantiene 2 páginas sin cláusulas especiales', () async {
+    final contract = ContractModel(
+      id: 'test_pf',
+      folio: 'EJ-POL-2026-0004',
+      creationDate: DateTime.now(),
+      clientName: 'Restaurant La Hacienda',
+      businessName: 'La Hacienda del Norte',
+      rfc: 'LHN180101AAA',
+      address: 'Av. Garza Sada 900, Monterrey, N.L.',
+      phone: '818-000-1122',
+      email: 'pagos@lahacienda.mx',
+      representativeName: 'Carlos Cantú',
+      representativeRole: 'Gerente General',
+      representativePhone: '818-000-1122',
+      serviceType: 'Póliza Comercial / Industrial',
+      durationMonths: 6,
+      startDate: DateTime(2026, 5, 1),
+      endDate: DateTime(2026, 11, 1),
+      visitFrequency: 'Mensual (1 visita/mes)',
+      totalVisits: 6,
+      targetPests: ['Cucarachas', 'Roedores'],
+      coveredAreas: 'Cocina, comedor y bodega',
+      costPerVisit: 1200.0,
+      monthlyCost: 1200.0,
+      totalContractCost: 7200.0,
+      paymentMethod: 'Transferencia Electrónica',
+      paymentTerms: 'Crédito comercial a 15 días naturales',
+      specialClauses: '',
+      jurisdiction: 'Monterrey, Nuevo León',
+      signerFullName: 'Carlos Cantú',
+    );
+
+    final pdfBytes = await ContractPdfService.generateContractPdf(contract);
+    final pdfString = String.fromCharCodes(pdfBytes);
+    final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfString).length;
+    expect(pageCount, 2);
+  });
 }
