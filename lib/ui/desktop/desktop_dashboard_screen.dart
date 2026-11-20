@@ -15,6 +15,7 @@ import '../clients/clients_directory_screen.dart';
 import '../cloud/google_drive_sync_screen.dart';
 import '../contracts/contract_history_screen.dart';
 import '../home_screen.dart';
+import '../invoices/create_invoice_screen.dart';
 import '../layouts/trap_layouts_history_screen.dart';
 import '../quotes/quote_form_screen.dart';
 import '../resources/resources_hub_screen.dart';
@@ -1524,6 +1525,27 @@ class _DesktopDashboardScreenState extends State<DesktopDashboardScreen> {
                           '${filtered.length}',
                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0F2B48),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          visualDensity: VisualDensity.compact,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        icon: const Icon(Icons.add, size: 14),
+                        label: const Text('Nueva Factura', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () async {
+                          final ok = await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const CreateInvoiceScreen()),
+                          );
+                          if (ok == true) {
+                            _loadAllData();
+                          }
+                        },
                       ),
                     ],
                   ),

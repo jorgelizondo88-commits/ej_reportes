@@ -40,6 +40,14 @@ class ClientModel {
   final String? driveFolderShareUrl; // Enlace público de solo lectura para el cliente
   final DateTime? updatedAt;
 
+  // Datos Fiscales para Facturación CFDI 4.0 (Opcional por cliente)
+  final String taxRfc; // RFC oficial (e.g. "CEM140703EM8")
+  final String taxBusinessName; // Razón Social exacta ante el SAT
+  final String taxAddress; // Domicilio fiscal completo (calle, núm, colonia)
+  final String taxZipCode; // Código Postal fiscal (5 dígitos)
+  final String taxRegime; // Régimen fiscal (e.g. "601 - General de Ley Personas Morales")
+  final String taxCfdiUse; // Uso de CFDI predeterminado (e.g. "G03 - Gastos en general")
+
   ClientModel({
     required this.id,
     required this.businessName,
@@ -53,7 +61,16 @@ class ClientModel {
     this.driveFolderId,
     this.driveFolderShareUrl,
     this.updatedAt,
+    this.taxRfc = '',
+    this.taxBusinessName = '',
+    this.taxAddress = '',
+    this.taxZipCode = '',
+    this.taxRegime = '',
+    this.taxCfdiUse = '',
   });
+
+  bool get hasFiscalData => taxRfc.trim().isNotEmpty && taxBusinessName.trim().isNotEmpty;
+  String get fiscalOrBusinessName => taxBusinessName.trim().isNotEmpty ? taxBusinessName.trim() : businessName.trim();
 
   Map<String, dynamic> toMap() {
     return {
@@ -69,6 +86,12 @@ class ClientModel {
       'driveFolderId': driveFolderId,
       'driveFolderShareUrl': driveFolderShareUrl,
       if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+      'taxRfc': taxRfc,
+      'taxBusinessName': taxBusinessName,
+      'taxAddress': taxAddress,
+      'taxZipCode': taxZipCode,
+      'taxRegime': taxRegime,
+      'taxCfdiUse': taxCfdiUse,
     };
   }
 
@@ -90,6 +113,12 @@ class ClientModel {
       driveFolderId: map['driveFolderId'],
       driveFolderShareUrl: map['driveFolderShareUrl'],
       updatedAt: map['updatedAt'] != null ? DateTime.tryParse(map['updatedAt'].toString()) : null,
+      taxRfc: map['taxRfc'] ?? '',
+      taxBusinessName: map['taxBusinessName'] ?? '',
+      taxAddress: map['taxAddress'] ?? '',
+      taxZipCode: map['taxZipCode'] ?? '',
+      taxRegime: map['taxRegime'] ?? '',
+      taxCfdiUse: map['taxCfdiUse'] ?? '',
     );
   }
 
@@ -106,6 +135,12 @@ class ClientModel {
     String? driveFolderId,
     String? driveFolderShareUrl,
     DateTime? updatedAt,
+    String? taxRfc,
+    String? taxBusinessName,
+    String? taxAddress,
+    String? taxZipCode,
+    String? taxRegime,
+    String? taxCfdiUse,
   }) {
     return ClientModel(
       id: id ?? this.id,
@@ -120,6 +155,12 @@ class ClientModel {
       driveFolderId: driveFolderId ?? this.driveFolderId,
       driveFolderShareUrl: driveFolderShareUrl ?? this.driveFolderShareUrl,
       updatedAt: updatedAt ?? this.updatedAt,
+      taxRfc: taxRfc ?? this.taxRfc,
+      taxBusinessName: taxBusinessName ?? this.taxBusinessName,
+      taxAddress: taxAddress ?? this.taxAddress,
+      taxZipCode: taxZipCode ?? this.taxZipCode,
+      taxRegime: taxRegime ?? this.taxRegime,
+      taxCfdiUse: taxCfdiUse ?? this.taxCfdiUse,
     );
   }
 }

@@ -749,6 +749,54 @@ class GoogleDriveSyncService {
     }
   }
 
+  /// Sube un archivo de factura (PDF o XML) directamente a la subcarpeta de estado (ej. Pendientes_de_Pago)
+  Future<String?> uploadInvoiceFile({
+    required String clientName,
+    required File localFile,
+    required String targetFileName,
+    String status = 'Pendientes_de_Pago',
+  }) async {
+    final api = await _getDriveApi();
+    if (api == null) return null;
+
+    try {
+      final statusFolderId = await getClientInvoiceStatusFolderId(api, clientName, status);
+      if (statusFolderId == null) return null;
+
+      final safeName = targetFileName.replaceAll("'", r"\'");
+      final existingFiles = await api.files.list(
+        q: "'$statusFolderId' in parents and name = '$safeName' and trashed = false",
+        $fields: 'files(id, name)',
+      );
+
+      final media = drive.Media(localFile.openRead(), localFile.lengthSync());
+
+      if (existingFiles.files != null && existingFiles.files!.isNotEmpty) {
+        final primaryId = existingFiles.files!.first.id!;
+        final updated = await api.files.update(
+          drive.File(),
+          primaryId,
+          uploadMedia: media,
+          $fields: 'id, name, webViewLink',
+        );
+        return updated.id;
+      } else {
+        final fileMeta = drive.File()
+          ..name = targetFileName
+          ..parents = [statusFolderId];
+        final created = await api.files.create(
+          fileMeta,
+          uploadMedia: media,
+          $fields: 'id, name, webViewLink',
+        );
+        return created.id;
+      }
+    } catch (e) {
+      debugPrint('Error subiendo factura a Drive ($targetFileName): $e');
+      return null;
+    }
+  }
+
   /// Crea la estructura de facturación (5_Facturas con Pendientes_de_Pago, Pagadas y Canceladas)
   /// para TODOS los clientes existentes (tanto en la base de datos local como en Google Drive).
   Future<int> ensureInvoiceFoldersForAllClients({Function(String status, double progress)? onProgress}) async {

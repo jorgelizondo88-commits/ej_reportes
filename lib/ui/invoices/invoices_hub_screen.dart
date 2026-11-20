@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/invoice_model.dart';
 import '../../services/google_drive_sync_service.dart';
 import '../cloud/google_drive_sync_screen.dart';
+import 'create_invoice_screen.dart';
 import 'invoice_viewer_screen.dart';
 
 class InvoicesHubScreen extends StatefulWidget {
@@ -333,6 +334,19 @@ class _InvoicesHubScreenState extends State<InvoicesHubScreen> with SingleTicker
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            icon: const Icon(Icons.add_circle_outline, size: 24),
+            tooltip: 'Nueva Factura',
+            onPressed: () async {
+              final ok = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const CreateInvoiceScreen()),
+              );
+              if (ok == true) {
+                _loadInvoices();
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
             onPressed: _loadInvoices,
@@ -520,6 +534,21 @@ class _InvoicesHubScreenState extends State<InvoicesHubScreen> with SingleTicker
                 ),
               ],
             ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFF0F2B48),
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('Nueva Factura'),
+        onPressed: () async {
+          final ok = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreateInvoiceScreen()),
+          );
+          if (ok == true) {
+            _loadInvoices();
+          }
+        },
+      ),
     );
   }
 

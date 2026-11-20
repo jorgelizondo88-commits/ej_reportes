@@ -5,6 +5,7 @@ import '../../services/client_service.dart';
 import '../../services/google_drive_sync_service.dart';
 import '../cloud/google_drive_sync_screen.dart';
 import '../invoices/invoices_hub_screen.dart';
+import '../invoices/create_invoice_screen.dart';
 import '../certificates/certificates_hub_screen.dart';
 import '../quotes/quote_form_screen.dart';
 
@@ -205,12 +206,52 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
     final emailCtrl = TextEditingController(text: client?.email ?? '');
     String facilityType = client?.facilityType ?? 'Comercial / Restaurante';
 
+    // Controladores fiscales (CFDI 4.0)
+    final taxRfcCtrl = TextEditingController(text: client?.taxRfc ?? '');
+    final taxBusinessCtrl = TextEditingController(text: client?.taxBusinessName ?? '');
+    final taxAddressCtrl = TextEditingController(text: client?.taxAddress ?? '');
+    final taxZipCtrl = TextEditingController(text: client?.taxZipCode ?? '');
+    String taxRegime = (client?.taxRegime.isNotEmpty == true)
+        ? client!.taxRegime
+        : '601 - General de Ley Personas Morales';
+    String taxCfdiUse = (client?.taxCfdiUse.isNotEmpty == true)
+        ? client!.taxCfdiUse
+        : 'G03 - Gastos en general';
+    bool showFiscalSection = client?.hasFiscalData ?? false;
+
     final facilityTypes = [
       'Comercial / Restaurante',
       'Industrial / Bodega',
       'Residencial / Casa',
       'Oficinas / Corporativo',
       'Hospitalario / Clínica',
+    ];
+
+    final taxRegimes = [
+      '601 - General de Ley Personas Morales',
+      '603 - Personas Morales con Fines no Lucrativos',
+      '605 - Sueldos y Salarios e Ingresos Asimilados a Salarios',
+      '606 - Arrendamiento',
+      '612 - Personas Físicas con Actividades Empresariales y Profesionales',
+      '616 - Sin obligaciones fiscales',
+      '621 - Incorporación Fiscal',
+      '625 - Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas',
+      '626 - Régimen Simplificado de Confianza (RESICO)',
+    ];
+
+    final cfdiUses = [
+      'G01 - Adquisición de mercancías',
+      'G02 - Devoluciones, descuentos o bonificaciones',
+      'G03 - Gastos en general',
+      'I01 - Construcciones',
+      'I02 - Mobiliario y equipo de oficina por inversiones',
+      'I03 - Equipo de transporte',
+      'I04 - Equipo de computo y accesorios',
+      'I08 - Otra maquinaria y equipo',
+      'D01 - Honorarios médicos, dentales y gastos hospitalarios',
+      'D02 - Gastos médicos por incapacidad o discapacidad',
+      'S01 - Sin efectos fiscales',
+      'CP01 - Pagos',
     ];
 
     bool isSaving = false;
@@ -225,54 +266,245 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
             client != null ? 'Editar Cliente' : 'Nuevo Cliente',
             style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: businessCtrl,
-                  enabled: !isSaving,
-                  decoration: const InputDecoration(labelText: 'Razón Social / Negocio *'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: contactCtrl,
-                  enabled: !isSaving,
-                  decoration: const InputDecoration(labelText: 'Persona de Contacto'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: phoneCtrl,
-                  enabled: !isSaving,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Teléfono'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: addressCtrl,
-                  enabled: !isSaving,
-                  decoration: const InputDecoration(labelText: 'Dirección'),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: emailCtrl,
-                  enabled: !isSaving,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(labelText: 'Correo'),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: facilityTypes.contains(facilityType) ? facilityType : facilityTypes.first,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Giro / Instalación'),
-                  items: facilityTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
-                  onChanged: isSaving
-                      ? null
-                      : (val) {
-                          if (val != null) setDialogState(() => facilityType = val);
-                        },
-                ),
-              ],
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- SECCIÓN 1: OPERATIVA DEL SERVICIO ---
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F2B48).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.storefront_outlined, size: 16, color: Color(0xFF0F2B48)),
+                        SizedBox(width: 8),
+                        Text(
+                          'Datos del Servicio / Sucursal',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: businessCtrl,
+                    enabled: !isSaving,
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre Comercial / Sucursal *',
+                      hintText: 'Ej. Confianza Médica o La Hacienda',
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: contactCtrl,
+                    enabled: !isSaving,
+                    decoration: const InputDecoration(
+                      labelText: 'Persona de Contacto',
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: phoneCtrl,
+                          enabled: !isSaving,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            labelText: 'Teléfono',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: emailCtrl,
+                          enabled: !isSaving,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'Correo Operativo',
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: addressCtrl,
+                    enabled: !isSaving,
+                    decoration: const InputDecoration(
+                      labelText: 'Dirección de Fumigación / Inmueble',
+                      hintText: 'Ubicación física donde se realiza el servicio',
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    value: facilityTypes.contains(facilityType) ? facilityType : facilityTypes.first,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Giro / Instalación', isDense: true),
+                    items: facilityTypes.map((t) => DropdownMenuItem(value: t, child: Text(t, style: const TextStyle(fontSize: 12.5), overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: isSaving
+                        ? null
+                        : (val) {
+                            if (val != null) setDialogState(() => facilityType = val);
+                          },
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // --- SECCIÓN 2: DATOS FISCALES (CFDI 4.0) ---
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      setDialogState(() => showFiscalSection = !showFiscalSection);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: showFiscalSection ? const Color(0xFF1E6091).withOpacity(0.12) : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: showFiscalSection ? const Color(0xFF1E6091) : Colors.grey.shade300,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.receipt_long,
+                                size: 18,
+                                color: showFiscalSection ? const Color(0xFF1E6091) : Colors.grey.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Datos Fiscales para Facturación (CFDI 4.0)',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12.5,
+                                      color: showFiscalSection ? const Color(0xFF1E6091) : Colors.black87,
+                                    ),
+                                  ),
+                                  Text(
+                                    taxRfcCtrl.text.isNotEmpty
+                                        ? 'RFC: ${taxRfcCtrl.text.toUpperCase()}'
+                                        : 'Opcional (solo si le expides facturas)',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          Icon(
+                            showFiscalSection ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                            color: Colors.grey.shade700,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  if (showFiscalSection) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: taxBusinessCtrl,
+                      enabled: !isSaving,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Razón Social Oficial (según SAT) *',
+                        hintText: 'Ej. CORPORATIVO EQUIPO MEDICO 360',
+                        isDense: true,
+                        prefixIcon: Icon(Icons.business, size: 18),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: TextField(
+                            controller: taxRfcCtrl,
+                            enabled: !isSaving,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(
+                              labelText: 'RFC del Cliente *',
+                              hintText: 'Ej. CEM140703EM8',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          flex: 2,
+                          child: TextField(
+                            controller: taxZipCtrl,
+                            enabled: !isSaving,
+                            keyboardType: TextInputType.number,
+                            maxLength: 5,
+                            decoration: const InputDecoration(
+                              labelText: 'C.P. Fiscal *',
+                              hintText: 'Ej. 64380',
+                              counterText: '',
+                              isDense: true,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: taxAddressCtrl,
+                      enabled: !isSaving,
+                      decoration: const InputDecoration(
+                        labelText: 'Domicilio Fiscal para Factura',
+                        hintText: 'Calle, número, colonia, ciudad y estado',
+                        isDense: true,
+                        prefixIcon: Icon(Icons.location_city, size: 18),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: taxRegimes.contains(taxRegime) ? taxRegime : taxRegimes.first,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Régimen Fiscal (SAT) *', isDense: true),
+                      items: taxRegimes.map((r) => DropdownMenuItem(value: r, child: Text(r, style: const TextStyle(fontSize: 11.5), overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: isSaving
+                          ? null
+                          : (val) {
+                              if (val != null) setDialogState(() => taxRegime = val);
+                            },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: cfdiUses.contains(taxCfdiUse) ? taxCfdiUse : cfdiUses.first,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Uso de CFDI predeterminado *', isDense: true),
+                      items: cfdiUses.map((u) => DropdownMenuItem(value: u, child: Text(u, style: const TextStyle(fontSize: 11.5), overflow: TextOverflow.ellipsis))).toList(),
+                      onChanged: isSaving
+                          ? null
+                          : (val) {
+                              if (val != null) setDialogState(() => taxCfdiUse = val);
+                            },
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
           actions: [
@@ -318,6 +550,14 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                         facilityType: facilityType,
                         hasTraps: client?.hasTraps ?? false,
                         defaultTraps: client?.defaultTraps ?? [],
+                        driveFolderId: client?.driveFolderId,
+                        driveFolderShareUrl: client?.driveFolderShareUrl,
+                        taxRfc: taxRfcCtrl.text.trim().toUpperCase(),
+                        taxBusinessName: taxBusinessCtrl.text.trim().toUpperCase(),
+                        taxAddress: taxAddressCtrl.text.trim(),
+                        taxZipCode: taxZipCtrl.text.trim(),
+                        taxRegime: taxRegime,
+                        taxCfdiUse: taxCfdiUse,
                       );
 
                       final bool cloudOk = await _clientService.saveClient(saved);
@@ -432,9 +672,39 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
-                              child: Text(
-                                title,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48)),
+                                  ),
+                                  if (c.hasFiscalData) ...[
+                                    const SizedBox(height: 3),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1E6091).withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: const Color(0xFF1E6091).withOpacity(0.3), width: 0.6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.receipt_long, size: 12, color: Color(0xFF1E6091)),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              'RFC: ${c.taxRfc}  •  ${c.taxBusinessName}',
+                                              style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF1E6091)),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
                             IconButton(
@@ -512,6 +782,23 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                                     builder: (context) => InvoicesHubScreen(
                                       initialClientFilter: c.businessName,
                                     ),
+                                  ),
+                                );
+                              },
+                            ),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                                backgroundColor: const Color(0xFF0F2B48),
+                                foregroundColor: Colors.white,
+                              ),
+                              icon: const Icon(Icons.add, size: 14),
+                              label: const Text('Facturar', style: TextStyle(fontSize: 12)),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => CreateInvoiceScreen(preselectedClient: c),
                                   ),
                                 );
                               },
