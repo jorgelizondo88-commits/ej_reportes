@@ -510,7 +510,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                               trailing: isSel ? const Icon(Icons.check_circle, color: Color(0xFF1E6091)) : null,
                               onTap: () {
                                 setState(() => _selectedClient = c);
-                                _checkAndLoadClientDefaults(c);
                                 Navigator.pop(ctx);
                               },
                             );
@@ -706,7 +705,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   _clients = updatedList;
                   _selectedClient = newClient;
                 });
-                _checkAndLoadClientDefaults(newClient);
 
                 Navigator.pop(dlgCtx);
                 ScaffoldMessenger.of(context).showSnackBar(
