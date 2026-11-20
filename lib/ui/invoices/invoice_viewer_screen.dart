@@ -149,6 +149,139 @@ class _InvoiceViewerScreenState extends State<InvoiceViewerScreen> {
     }
   }
 
+  Future<void> _confirmCancelInvoice() async {
+    String selectedMotivo = '02 - Comprobante emitido con errores sin relación';
+    final replacementUuidCtrl = TextEditingController();
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (dlgCtx, setDlgState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: const Row(
+            children: [
+              Icon(Icons.cancel_outlined, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Cancelar Factura (SAT)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F2B48))),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('¿Deseas solicitar la cancelación fiscal de la factura ${_currentInvoice.folio}?'),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('📄 Folio: ${_currentInvoice.folio}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        Text('🏢 Cliente: ${_currentInvoice.clientName}', style: const TextStyle(fontSize: 11.5)),
+                        if (_currentInvoice.hasXml)
+                          Text('📑 XML: ${_currentInvoice.xmlFileName}', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Motivo de Cancelación ante el SAT *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F2B48))),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    value: selectedMotivo,
+                    isExpanded: true,
+                    decoration: const InputDecoration(isDense: true, border: OutlineInputBorder()),
+                    items: const [
+                      DropdownMenuItem(
+                        value: '01 - Comprobante emitido con errores con relación',
+                        child: Text('01 - Con relación (Sustitución)', style: TextStyle(fontSize: 11.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: '02 - Comprobante emitido con errores sin relación',
+                        child: Text('02 - Sin relación (Error de datos)', style: TextStyle(fontSize: 11.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: '03 - No se llevó a cabo la operación',
+                        child: Text('03 - Operación no realizada', style: TextStyle(fontSize: 11.5)),
+                      ),
+                      DropdownMenuItem(
+                        value: '04 - Operación nominativa relacionada en factura global',
+                        child: Text('04 - Operación en factura global', style: TextStyle(fontSize: 11.5)),
+                      ),
+                    ],
+                    onChanged: (v) => setDlgState(() => selectedMotivo = v!),
+                  ),
+                  if (selectedMotivo.startsWith('01')) ...[
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: replacementUuidCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'UUID que sustituye a esta factura *',
+                        hintText: 'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX',
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  const Text(
+                    'En Google Drive, el PDF y XML se moverán automáticamente a la subcarpeta "5_Facturas/Canceladas".',
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Volver')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+              onPressed: () {
+                if (selectedMotivo.startsWith('01') && replacementUuidCtrl.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Ingresa el UUID de sustitución para motivo 01.')),
+                  );
+                  return;
+                }
+                Navigator.pop(dlgCtx, true);
+              },
+              child: const Text('Solicitar Cancelación'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isProcessing = true);
+      final ok = await _driveService.markInvoiceAsCanceled(_currentInvoice);
+      setState(() => _isProcessing = false);
+
+      if (mounted) {
+        if (ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('¡Factura cancelada y movida a "Canceladas" en Google Drive con éxito!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No se pudo cancelar en Google Drive. Revisa tu conexión.')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,6 +306,12 @@ class _InvoiceViewerScreenState extends State<InvoiceViewerScreen> {
             tooltip: 'Enviar por WhatsApp',
             onPressed: _shareViaWhatsApp,
           ),
+          if (_currentInvoice.status != 'canceled')
+            IconButton(
+              icon: const Icon(Icons.cancel_outlined, color: Colors.orangeAccent),
+              tooltip: 'Cancelar Factura ante SAT',
+              onPressed: _isProcessing ? null : _confirmCancelInvoice,
+            ),
         ],
       ),
       body: Stack(

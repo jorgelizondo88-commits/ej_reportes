@@ -314,6 +314,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     final addressCtrl = TextEditingController();
     final taxRfcCtrl = TextEditingController();
     final taxBusinessCtrl = TextEditingController();
+    final taxAddressCtrl = TextEditingController();
     final taxZipCtrl = TextEditingController();
     String taxRegime = '601 - General de Ley Personas Morales';
     String taxCfdiUse = 'G03 - Gastos en general';
@@ -323,46 +324,59 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       builder: (dlgCtx) => StatefulBuilder(
         builder: (dlgCtx, setDlgState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Registrar Nuevo Cliente', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2B48), fontSize: 16)),
+          title: const Row(
+            children: [
+              Icon(Icons.person_add, color: Color(0xFF0F2B48)),
+              SizedBox(width: 8),
+              Text('Registrar Nuevo Cliente', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F2B48), fontSize: 16)),
+            ],
+          ),
           content: SizedBox(
-            width: 440,
+            width: 480,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Datos del Negocio / Sucursal', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F2B48))),
+                  const Text('1. Datos Operativos (Sucursal / Servicio)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0F2B48))),
                   const SizedBox(height: 6),
                   TextField(
                     controller: businessCtrl,
                     decoration: const InputDecoration(labelText: 'Nombre Comercial / Sucursal *', hintText: 'Ej. Confianza Médica', isDense: true),
                   ),
                   const SizedBox(height: 8),
-                  TextField(
-                    controller: contactCtrl,
-                    decoration: const InputDecoration(labelText: 'Persona de Contacto', isDense: true),
-                  ),
-                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
                         child: TextField(
-                          controller: phoneCtrl,
-                          keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(labelText: 'Teléfono', isDense: true),
+                          controller: contactCtrl,
+                          decoration: const InputDecoration(labelText: 'Persona de Contacto', hintText: 'Ej. Dra. Patricia', isDense: true),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: TextField(
-                          controller: addressCtrl,
-                          decoration: const InputDecoration(labelText: 'Dirección Sucursal', isDense: true),
+                          controller: phoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(labelText: 'Teléfono', hintText: 'Ej. 818-123-4567', isDense: true),
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: addressCtrl,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Dirección de la Sucursal / Inmueble (Servicio)',
+                      hintText: 'Ej. Av. Vasconcelos 100, Col. Del Valle, San Pedro Garza García, N.L.',
+                      isDense: true,
+                      alignLabelWithHint: true,
+                    ),
+                  ),
                   const Divider(height: 24),
-                  const Text('Datos Fiscales (SAT CFDI 4.0)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E6091))),
+                  const Text('2. Datos Fiscales Oficiales (SAT CFDI 4.0)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E6091))),
                   const SizedBox(height: 6),
                   TextField(
                     controller: taxBusinessCtrl,
@@ -377,7 +391,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                         child: TextField(
                           controller: taxRfcCtrl,
                           textCapitalization: TextCapitalization.characters,
-                          decoration: const InputDecoration(labelText: 'RFC *', hintText: 'CEM140703EM8', isDense: true),
+                          decoration: const InputDecoration(labelText: 'RFC del Cliente *', hintText: 'CEM140703EM8', isDense: true),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -393,10 +407,32 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     ],
                   ),
                   const SizedBox(height: 8),
+                  TextField(
+                    controller: taxAddressCtrl,
+                    minLines: 2,
+                    maxLines: 3,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      labelText: 'Domicilio Fiscal Completo para Factura *',
+                      hintText: 'Calle, número exterior/interior, colonia, municipio, estado',
+                      isDense: true,
+                      alignLabelWithHint: true,
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.copy, size: 18),
+                        tooltip: 'Copiar dirección de sucursal',
+                        onPressed: () {
+                          if (addressCtrl.text.isNotEmpty) {
+                            taxAddressCtrl.text = addressCtrl.text.toUpperCase();
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: taxRegime,
                     isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Régimen Fiscal', isDense: true),
+                    decoration: const InputDecoration(labelText: 'Régimen Fiscal (SAT)', isDense: true),
                     items: const [
                       DropdownMenuItem(value: '601 - General de Ley Personas Morales', child: Text('601 - General de Ley Personas Morales', style: TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis)),
                       DropdownMenuItem(value: '612 - Personas Físicas con Actividades Empresariales y Profesionales', child: Text('612 - PFAE', style: TextStyle(fontSize: 11))),
@@ -422,6 +458,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   return;
                 }
 
+                final finalTaxAddress = taxAddressCtrl.text.trim().isNotEmpty
+                    ? taxAddressCtrl.text.trim().toUpperCase()
+                    : addressCtrl.text.trim().toUpperCase();
+
                 final newClient = ClientModel(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   businessName: bName,
@@ -432,8 +472,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                   facilityType: 'Comercial / Restaurante',
                   hasTraps: false,
                   taxRfc: taxRfcCtrl.text.trim().toUpperCase(),
-                  taxBusinessName: taxBusinessCtrl.text.trim().isNotEmpty ? taxBusinessCtrl.text.trim().toUpperCase() : (bName.isNotEmpty ? bName.toUpperCase() : cName.toUpperCase()),
-                  taxAddress: addressCtrl.text.trim(),
+                  taxBusinessName: taxBusinessCtrl.text.trim().isNotEmpty
+                      ? taxBusinessCtrl.text.trim().toUpperCase()
+                      : (bName.isNotEmpty ? bName.toUpperCase() : cName.toUpperCase()),
+                  taxAddress: finalTaxAddress,
                   taxZipCode: taxZipCtrl.text.trim(),
                   taxRegime: taxRegime,
                   taxCfdiUse: taxCfdiUse,

@@ -117,4 +117,53 @@ void main() {
     expect(xml.contains('Rfc="CEM140703EM8"'), true);
     expect(xml.contains('UUID="4ED642D6-7601-4C3C-B7BD-7E00B99E0F74"'), true);
   });
+
+  test('InvoicePdfService soporta múltiples conceptos que sobrepasan 1 página sin fallar', () async {
+    final timbre = CfdiTimbreDigital(
+      uuid: 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
+      noCertificadoEmisor: '00001000000518855488',
+      noCertificadoSAT: '00001000000707568881',
+      fechaCertificacion: DateTime(2026, 11, 18, 14, 0, 0),
+      cadenaOriginal: '||1.1|A1B2C3D4-E5F6-7890-ABCD-EF1234567890|2026-11-18T14:00:00||',
+      selloEmisor: 'selloMultiPagePrueba==',
+      selloSAT: 'selloSatMultiPagePrueba==',
+      rfcProvCertif: 'FFM100507289',
+      qrString: 'https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=A1B2C3D4-E5F6-7890-ABCD-EF1234567890',
+    );
+
+    // Creamos 10 conceptos con descripción larga para forzar paginación múltiple
+    final manyItems = List.generate(10, (index) {
+      return CfdiInvoiceItem(
+        quantity: (index + 1).toDouble(),
+        description: 'SERVICIO DE CONTROL INTEGRAL DE PLAGAS Y MONITOREO DE ROEDORES - SECTOR ${index + 1}',
+        satProductCode: '72102100',
+        satProductDesc: 'Servicios de control o exterminación de plagas',
+        satUnitCode: 'E48',
+        satUnitDesc: 'Unidad de servicio',
+        unitPrice: 500.0 * (index + 1),
+      );
+    });
+
+    final multiInvoice = CfdiInvoiceData(
+      series: 'AFAD',
+      folio: '383',
+      emissionDate: DateTime(2026, 11, 18, 14, 0, 0),
+      receiverBusinessName: 'CORPORATIVO EQUIPO MEDICO 360',
+      receiverCommercialName: 'CONFIANZA MEDICA',
+      receiverRfc: 'CEM140703EM8',
+      receiverAddress: 'CALLE ADOLFOLOPEZMATEOS 8911, Col. Burócratas del Estado, C.P. 64380, Monterrey, N.L.',
+      receiverZip: '64380',
+      receiverRegime: '601 - General de Ley Personas Morales',
+      receiverCfdiUse: 'G03 - Gastos en general',
+      items: manyItems,
+      timbre: timbre,
+    );
+
+    final pdfBytes = await InvoicePdfService.generateInvoicePdf(multiInvoice);
+    expect(pdfBytes.isNotEmpty, true);
+
+    final pdfStr = String.fromCharCodes(pdfBytes);
+    final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfStr).length;
+    expect(pageCount >= 2, true, reason: 'Debe generar 2 o más páginas de forma fluida y sin truncar');
+  });
 }

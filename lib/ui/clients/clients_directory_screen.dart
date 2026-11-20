@@ -342,10 +342,13 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                   TextField(
                     controller: addressCtrl,
                     enabled: !isSaving,
+                    minLines: 2,
+                    maxLines: 3,
                     decoration: const InputDecoration(
                       labelText: 'Dirección de Fumigación / Inmueble',
                       hintText: 'Ubicación física donde se realiza el servicio',
                       isDense: true,
+                      alignLabelWithHint: true,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -471,10 +474,13 @@ class _ClientsDirectoryScreenState extends State<ClientsDirectoryScreen> {
                     TextField(
                       controller: taxAddressCtrl,
                       enabled: !isSaving,
+                      minLines: 2,
+                      maxLines: 3,
                       decoration: const InputDecoration(
                         labelText: 'Domicilio Fiscal para Factura',
                         hintText: 'Calle, número, colonia, ciudad y estado',
                         isDense: true,
+                        alignLabelWithHint: true,
                         prefixIcon: Icon(Icons.location_city, size: 18),
                       ),
                     ),
