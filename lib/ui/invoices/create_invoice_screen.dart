@@ -4,11 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../models/cfdi_invoice_data.dart';
 import '../../models/client_model.dart';
+import '../../models/invoice_model.dart';
 import '../../models/sat_catalogs.dart';
 import '../../services/cfdi_stamping_service.dart';
 import '../../services/client_service.dart';
 import '../../services/invoice_pdf_service.dart';
 import '../../services/invoice_storage_service.dart';
+import 'invoice_viewer_screen.dart';
 
 class CreateInvoiceScreen extends StatefulWidget {
   final ClientModel? preselectedClient;
@@ -81,8 +83,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         (c) => c.id == widget.preselectedClient!.id,
         orElse: () => widget.preselectedClient!,
       );
-    } else if (clients.isNotEmpty) {
-      initial = clients.first;
     }
 
     setState(() {
@@ -94,64 +94,282 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       _recentConcepts = recent;
       _isLoadingClients = false;
     });
-
-    if (initial != null) {
-      await _checkAndLoadClientDefaults(initial);
-    }
   }
 
-  Future<void> _checkAndLoadClientDefaults(ClientModel client) async {
-    if (_items.isNotEmpty) return;
+  // --- GESTIÓN DE PLANTILLAS PERSONALIZADAS ---
+  Future<void> _openTemplatesModal() async {
+    final templates = await InvoiceStorageService.getCustomTemplates();
 
-    final lastInvoice = await InvoiceStorageService.getClientLastInvoice(client.id);
-    if (lastInvoice != null && lastInvoice.items.isNotEmpty) {
-      setState(() {
-        _items = List.from(lastInvoice.items);
-        _paymentForm = lastInvoice.paymentForm;
-        _paymentMethod = lastInvoice.paymentMethod;
-      });
-    } else {
-      setState(() {
-        _items = [
-          CfdiInvoiceItem(
-            quantity: 1,
-            description: 'Servicio de Control y Manejo Integrado de Plagas',
-            satProductCode: '72102100',
-            satProductDesc: 'Servicios de control y exterminación de plagas',
-            satUnitCode: 'E48',
-            satUnitDesc: 'Unidad de servicio',
-            unitPrice: 1500.0,
-          ),
-        ];
-      });
-    }
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (modalCtx) => StatefulBuilder(
+        builder: (modalCtx, setModalState) {
+          return Container(
+            height: MediaQuery.of(modalCtx).size.height * 0.75,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.bookmarks, color: Color(0xFF0F2B48)),
+                        SizedBox(width: 8),
+                        Text('Plantillas Guardadas', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2B48))),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(modalCtx),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Selecciona una plantilla para rellenar en automático el cliente y sus conceptos mensuales.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const Divider(height: 20),
+                if (templates.isEmpty)
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.bookmark_border, size: 50, color: Colors.grey.shade400),
+                          const SizedBox(height: 12),
+                          const Text('No tienes plantillas guardadas aún', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 14)),
+                          const SizedBox(height: 6),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24),
+                            child: Text(
+                              'Cuando llenes los conceptos de un cliente recurrente, toca "Guardar Plantilla" y aparecerá aquí cada mes.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: templates.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (ctx, idx) {
+                        final t = templates[idx];
+                        return Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          elevation: 1,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              _applyTemplate(t);
+                              Navigator.pop(modalCtx);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0F2B48).withOpacity(0.08),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.description, color: Color(0xFF0F2B48), size: 22),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(t.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48))),
+                                        const SizedBox(height: 2),
+                                        Text('Cliente: ${t.clientName}', style: const TextStyle(fontSize: 11.5, color: Colors.black87)),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          '${t.items.length} concepto(s) • Total: ${currencyFmt.format(t.total)} MXN',
+                                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                    tooltip: 'Eliminar plantilla',
+                                    onPressed: () async {
+                                      final delConfirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (c) => AlertDialog(
+                                          title: const Text('¿Eliminar Plantilla?'),
+                                          content: Text('¿Deseas eliminar la plantilla "${t.name}"?'),
+                                          actions: [
+                                            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+                                            TextButton(
+                                              style: TextButton.styleFrom(foregroundColor: Colors.red),
+                                              onPressed: () => Navigator.pop(c, true),
+                                              child: const Text('Eliminar'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (delConfirm == true) {
+                                        await InvoiceStorageService.deleteCustomTemplate(t.id);
+                                        setModalState(() {
+                                          templates.removeWhere((item) => item.id == t.id);
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
-  Future<void> _loadLastInvoiceTemplate() async {
-    if (_selectedClient == null) return;
-    final last = await InvoiceStorageService.getClientLastInvoice(_selectedClient!.id);
-    if (last == null || last.items.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Este cliente aún no tiene facturas previas registradas para duplicar.')),
+  void _applyTemplate(InvoiceTemplate t) {
+    ClientModel? targetClient;
+    try {
+      targetClient = _clients.firstWhere((c) => c.id == t.clientId);
+    } catch (_) {
+      try {
+        targetClient = _clients.firstWhere((c) => c.businessName.toLowerCase() == t.clientName.toLowerCase());
+      } catch (_) {
+        targetClient = ClientModel(
+          id: t.clientId.isNotEmpty ? t.clientId : DateTime.now().millisecondsSinceEpoch.toString(),
+          businessName: t.clientName,
+          contactName: '',
+          phone: '',
+          address: '',
+          email: '',
+          facilityType: 'Comercial / Restaurante',
+          hasTraps: false,
         );
       }
-      return;
     }
 
     setState(() {
-      _items = List.from(last.items);
-      _paymentForm = last.paymentForm;
-      _paymentMethod = last.paymentMethod;
+      _selectedClient = targetClient;
+      _items = List.from(t.items);
+      _paymentForm = t.paymentForm;
+      _paymentMethod = t.paymentMethod;
+      _observationsCtrl.text = t.observations;
+      _includeBankInfo = t.includeBankInfo;
     });
 
-    if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('¡Plantilla "${t.name}" cargada con éxito! Puedes editarla libremente.'),
+        backgroundColor: const Color(0xFF1E6091),
+      ),
+    );
+  }
+
+  Future<void> _saveCurrentAsTemplate() async {
+    if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Se cargaron los conceptos del mes anterior! Puedes editarlos libremente.'),
-          backgroundColor: Color(0xFF1E6091),
-        ),
+        const SnackBar(content: Text('Agrega al menos un concepto para guardar como plantilla.')),
       );
+      return;
+    }
+
+    final defaultName = _selectedClient != null
+        ? '${_selectedClient!.businessName} - Póliza Mensual'
+        : 'Plantilla de Facturación Mensual';
+    final nameCtrl = TextEditingController(text: defaultName);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: const Row(
+          children: [
+            Icon(Icons.bookmark_add, color: Color(0xFF0F2B48)),
+            SizedBox(width: 8),
+            Text('Guardar como Plantilla', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2B48))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Esta plantilla guardará el cliente y los conceptos actuales para reutilizarlos en meses futuros con un solo toque.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Nombre de la Plantilla *',
+                hintText: 'Ej. Confianza Médica - Póliza Mensual',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Incluye ${_items.length} concepto(s) por un total de ${currencyFmt.format(_total)} MXN.',
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dlgCtx, true),
+            child: const Text('Guardar Plantilla'),
+          ),
+        ],
+      ),
+    );
+
+    if (saved == true && nameCtrl.text.trim().isNotEmpty) {
+      final template = InvoiceTemplate(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: nameCtrl.text.trim(),
+        clientId: _selectedClient?.id ?? '',
+        clientName: _selectedClient?.businessName ?? 'Cliente General',
+        items: List.from(_items),
+        paymentForm: _paymentForm,
+        paymentMethod: _paymentMethod,
+        observations: _observationsCtrl.text.trim(),
+        includeBankInfo: _includeBankInfo,
+        createdAt: DateTime.now(),
+      );
+
+      await InvoiceStorageService.saveCustomTemplate(template);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡Plantilla "${template.name}" guardada con éxito!'),
+            backgroundColor: const Color(0xFF15803D),
+          ),
+        );
+      }
     }
   }
 
@@ -916,10 +1134,84 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     final client = _selectedClient!;
 
     final rfc = client.taxRfc.trim().isNotEmpty ? client.taxRfc.trim() : 'XAXX010101000';
-    final businessName = client.taxBusinessName.trim().isNotEmpty ? client.taxBusinessName.trim() : (client.businessName.isNotEmpty ? client.businessName : client.contactName);
+    final businessName = client.taxBusinessName.trim().isNotEmpty
+        ? client.taxBusinessName.trim()
+        : (client.businessName.isNotEmpty ? client.businessName : client.contactName);
     final zip = client.taxZipCode.trim().isNotEmpty ? client.taxZipCode.trim() : '64380';
     final regime = client.taxRegime.trim().isNotEmpty ? client.taxRegime : '601 - General de Ley Personas Morales';
     final cfdiUse = client.taxCfdiUse.trim().isNotEmpty ? client.taxCfdiUse : 'G03 - Gastos en general';
+    final folioStr = '$_series${_folioCtrl.text.trim().isNotEmpty ? _folioCtrl.text.trim() : _nextFolioNumber}';
+
+    // DIÁLOGO DE CONFIRMACIÓN ANTES DE TIMBRAR
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dlgCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.verified_outlined, color: Color(0xFF0F2B48)),
+            SizedBox(width: 8),
+            Text('¿Confirmar Emisión?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F2B48))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('¿Confirmas que deseas timbrar y emitir esta factura oficial?'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFCBD5E1)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Folio:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(folioStr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F2B48))),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Receptor: $businessName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  Text('RFC: $rfc', style: const TextStyle(fontSize: 11.5, color: Colors.black87)),
+                  const SizedBox(height: 4),
+                  Text('Conceptos: ${_items.length} elemento(s)', style: const TextStyle(fontSize: 11.5)),
+                  const Divider(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('TOTAL A FACTURAR:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(currencyFmt.format(_total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF15803D))),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Esta acción generará el timbre fiscal del SAT y subirá el PDF y XML a Google Drive.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dlgCtx, false), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F2B48), foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(dlgCtx, true),
+            child: const Text('Sí, Timbrar y Emitir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
 
     setState(() => _isStamping = true);
 
@@ -953,7 +1245,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       if (!mounted) return;
       setState(() => _isStamping = false);
 
-      _showSuccessDialog(result);
+      _showSuccessDialog(result, client);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isStamping = false);
@@ -963,7 +1255,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     }
   }
 
-  void _showSuccessDialog(StampedInvoiceResult result) {
+  void _showSuccessDialog(StampedInvoiceResult result, ClientModel client) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1015,6 +1307,40 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             },
             child: const Text('Cerrar'),
           ),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0F2B48),
+              side: const BorderSide(color: Color(0xFF0F2B48)),
+            ),
+            icon: const Icon(Icons.picture_as_pdf, size: 18),
+            label: const Text('Ver PDF'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => InvoiceViewerScreen(
+                    invoice: InvoiceModel(
+                      id: result.drivePdfFileId ?? '',
+                      pdfName: 'Factura_${result.invoice.fullFolio}.pdf',
+                      folio: result.invoice.fullFolio,
+                      clientName: client.businessName,
+                      clientPhone: client.phone,
+                      clientEmail: client.email,
+                      createdTime: result.invoice.emissionDate,
+                      xmlFileId: result.driveXmlFileId,
+                      xmlFileName: 'Factura_${result.invoice.fullFolio}.xml',
+                      status: 'pending',
+                      parentFolderId: '',
+                    ),
+                    localPdfFile: result.localPdfFile,
+                  ),
+                ),
+              ).then((_) {
+                if (mounted) Navigator.pop(context, true);
+              });
+            },
+          ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF15803D), foregroundColor: Colors.white),
             icon: const Icon(Icons.share, size: 18),
@@ -1051,12 +1377,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         backgroundColor: const Color(0xFF0F2B48),
         foregroundColor: Colors.white,
         actions: [
-          if (_selectedClient != null)
-            TextButton.icon(
-              icon: const Icon(Icons.history, color: Colors.amberAccent, size: 18),
-              label: const Text('Mes Anterior', style: TextStyle(color: Colors.amberAccent, fontSize: 12)),
-              onPressed: _loadLastInvoiceTemplate,
-            ),
+          TextButton.icon(
+            icon: const Icon(Icons.bookmarks_outlined, color: Colors.amberAccent, size: 18),
+            label: const Text('Plantillas', style: TextStyle(color: Colors.amberAccent, fontSize: 13, fontWeight: FontWeight.bold)),
+            onPressed: _openTemplatesModal,
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -1198,24 +1523,51 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('Conceptos a Facturar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F2B48))),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF0F2B48),
-                            side: const BorderSide(color: Color(0xFF0F2B48)),
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Agregar Concepto', style: TextStyle(fontSize: 12)),
-                          onPressed: () => _openItemDialog(),
+                        Row(
+                          children: [
+                            if (_items.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: TextButton.icon(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF15803D),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  icon: const Icon(Icons.bookmark_add_outlined, size: 16),
+                                  label: const Text('Guardar Plantilla', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                  onPressed: _saveCurrentAsTemplate,
+                                ),
+                              ),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF0F2B48),
+                                side: const BorderSide(color: Color(0xFF0F2B48)),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('Agregar Concepto', style: TextStyle(fontSize: 12)),
+                              onPressed: () => _openItemDialog(),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                     const Divider(height: 16),
 
                     if (_items.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: Text('No hay conceptos en la factura. Toca en "Agregar Concepto".', style: TextStyle(color: Colors.grey))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 42, color: Colors.grey.shade400),
+                              const SizedBox(height: 8),
+                              const Text('Factura en blanco', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 13)),
+                              const SizedBox(height: 4),
+                              const Text('Toca "+ Agregar Concepto" o carga una plantilla desde "Plantillas".', style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+                            ],
+                          ),
+                        ),
                       )
                     else
                       ListView.separated(

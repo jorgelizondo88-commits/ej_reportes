@@ -3,6 +3,7 @@ import 'package:ej_reportes/models/cfdi_invoice_data.dart';
 import 'package:ej_reportes/models/client_model.dart';
 import 'package:ej_reportes/services/cfdi_stamping_service.dart';
 import 'package:ej_reportes/services/invoice_pdf_service.dart';
+import 'package:ej_reportes/services/invoice_storage_service.dart';
 import 'package:ej_reportes/utils/spanish_number_to_words.dart';
 
 void main() {
@@ -165,5 +166,37 @@ void main() {
     final pdfStr = String.fromCharCodes(pdfBytes);
     final pageCount = RegExp(r'/Type\s*/Page[^s]').allMatches(pdfStr).length;
     expect(pageCount >= 2, true, reason: 'Debe generar 2 o más páginas de forma fluida y sin truncar');
+  });
+
+  test('InvoiceStorageService guarda, recupera y elimina plantillas de facturación personalizadas', () async {
+    final template = InvoiceTemplate(
+      id: 'tmpl_1',
+      name: 'Póliza Mensual Confianza Médica',
+      clientId: 'c1',
+      clientName: 'Confianza Médica',
+      items: [
+        CfdiInvoiceItem(
+          quantity: 1,
+          description: 'Póliza Mensual de Manejo Integral de Plagas',
+          satProductCode: '72102100',
+          satProductDesc: 'Servicios de control o exterminación de plagas',
+          satUnitCode: 'E48',
+          satUnitDesc: 'Unidad de servicio',
+          unitPrice: 1800.0,
+        ),
+      ],
+      paymentForm: '03 - Transferencia electrónica de fondos',
+      paymentMethod: 'PUE - Pago en una sola exhibición',
+      observations: 'Servicio programado cada primer lunes de mes',
+      includeBankInfo: true,
+      createdAt: DateTime(2026, 11, 19),
+    );
+
+    expect(template.total, 2088.0);
+    final map = template.toMap();
+    final restored = InvoiceTemplate.fromMap(map);
+    expect(restored.name, 'Póliza Mensual Confianza Médica');
+    expect(restored.items.length, 1);
+    expect(restored.items.first.description, 'Póliza Mensual de Manejo Integral de Plagas');
   });
 }

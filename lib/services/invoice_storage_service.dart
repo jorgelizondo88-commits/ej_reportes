@@ -124,4 +124,101 @@ class InvoiceStorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_lastFolioKey, folio);
   }
+
+  static const String _customTemplatesKey = 'ej_invoice_custom_templates';
+
+  /// Guarda una plantilla personalizada definida por el usuario
+  static Future<void> saveCustomTemplate(InvoiceTemplate template) async {
+    final prefs = await SharedPreferences.getInstance();
+    final templates = await getCustomTemplates();
+    templates.removeWhere((t) => t.id == template.id);
+    templates.insert(0, template);
+    await prefs.setString(_customTemplatesKey, jsonEncode(templates.map((t) => t.toMap()).toList()));
+  }
+
+  /// Obtiene la lista de plantillas guardadas por el usuario
+  static Future<List<InvoiceTemplate>> getCustomTemplates() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_customTemplatesKey);
+    if (raw == null || raw.isEmpty) return [];
+    try {
+      final List<dynamic> list = jsonDecode(raw);
+      return list.map((e) => InvoiceTemplate.fromMap(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Elimina una plantilla guardada
+  static Future<void> deleteCustomTemplate(String templateId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final templates = await getCustomTemplates();
+    templates.removeWhere((t) => t.id == templateId);
+    await prefs.setString(_customTemplatesKey, jsonEncode(templates.map((t) => t.toMap()).toList()));
+  }
+}
+
+class InvoiceTemplate {
+  final String id;
+  final String name; // e.g. "Confianza Médica - Póliza Mensual"
+  final String clientId;
+  final String clientName;
+  final List<CfdiInvoiceItem> items;
+  final String paymentForm;
+  final String paymentMethod;
+  final String observations;
+  final bool includeBankInfo;
+  final DateTime createdAt;
+
+  InvoiceTemplate({
+    required this.id,
+    required this.name,
+    required this.clientId,
+    required this.clientName,
+    required this.items,
+    this.paymentForm = '03 - Transferencia electrónica de fondos',
+    this.paymentMethod = 'PUE - Pago en una sola exhibición',
+    this.observations = '',
+    this.includeBankInfo = true,
+    required this.createdAt,
+  });
+
+  double get total {
+    double sum = 0.0;
+    for (final it in items) {
+      sum += it.total;
+    }
+    return sum;
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'name': name,
+    'clientId': clientId,
+    'clientName': clientName,
+    'items': items.map((it) => it.toMap()).toList(),
+    'paymentForm': paymentForm,
+    'paymentMethod': paymentMethod,
+    'observations': observations,
+    'includeBankInfo': includeBankInfo,
+    'createdAt': createdAt.toIso8601String(),
+  };
+
+  factory InvoiceTemplate.fromMap(Map<String, dynamic> map) {
+    return InvoiceTemplate(
+      id: map['id'] ?? '',
+      name: map['name'] ?? '',
+      clientId: map['clientId'] ?? '',
+      clientName: map['clientName'] ?? '',
+      items: (map['items'] as List<dynamic>?)
+              ?.map((e) => CfdiInvoiceItem.fromMap(e as Map<String, dynamic>))
+              .toList() ??
+          [],
+      paymentForm: map['paymentForm'] ?? '03 - Transferencia electrónica de fondos',
+      paymentMethod: map['paymentMethod'] ?? 'PUE - Pago en una sola exhibición',
+      observations: map['observations'] ?? '',
+      includeBankInfo: map['includeBankInfo'] ?? true,
+      createdAt: DateTime.tryParse(map['createdAt'] ?? '') ?? DateTime.now(),
+    );
+  }
 }
