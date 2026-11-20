@@ -77,7 +77,7 @@ class CfdiTimbreDigital {
     required this.cadenaOriginal,
     required this.selloEmisor,
     required this.selloSAT,
-    this.rfcProvCertif = 'FFM100507289',
+    this.rfcProvCertif = 'SAT970701NN3',
     required this.qrString,
   });
 
@@ -101,7 +101,7 @@ class CfdiTimbreDigital {
         cadenaOriginal: map['cadenaOriginal'] ?? '',
         selloEmisor: map['selloEmisor'] ?? '',
         selloSAT: map['selloSAT'] ?? '',
-        rfcProvCertif: map['rfcProvCertif'] ?? 'FFM100507289',
+        rfcProvCertif: map['rfcProvCertif'] ?? 'SAT970701NN3',
         qrString: map['qrString'] ?? '',
       );
 }

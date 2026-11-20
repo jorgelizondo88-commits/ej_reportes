@@ -68,7 +68,7 @@ class InvoicePdfService {
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
                     pw.Text(
-                      'RFC Proveedor Certificación: ${invoice.timbre?.rfcProvCertif ?? "FFM100507289"}',
+                      'RFC Proveedor Certificación: ${invoice.timbre?.rfcProvCertif ?? "PAC AUTORIZADO SAT"}',
                       style: const pw.TextStyle(fontSize: 5.8, color: textDark),
                     ),
                     pw.Text(
@@ -112,8 +112,8 @@ class InvoicePdfService {
               pw.SizedBox(height: 4),
               pw.Center(
                 child: pw.Text(
-                  'CFDI Certificado por Factura Fácilmente de México, S.A. de C.V. y generado desde EJ Exterminadores       Proveedor Autorizado de Certificación No. 57553',
-                  style: const pw.TextStyle(fontSize: 5.4, color: PdfColors.grey700),
+                  'Comprobante Fiscal Digital por Internet (CFDI 4.0) emitido por EJ Exterminadores - Manejo Integrado de Plagas',
+                  style: const pw.TextStyle(fontSize: 5.6, color: PdfColors.grey700),
                 ),
               ),
             ],

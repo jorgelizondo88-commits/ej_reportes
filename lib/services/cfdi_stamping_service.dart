@@ -113,7 +113,7 @@ class CfdiStampingService {
     final noCertificadoSAT = '00001000000707568881';
     final selloEmisor = _generateSelloBase64(172);
     final selloSAT = _generateSelloBase64(172);
-    final rfcProvCertif = 'FFM100507289';
+    final rfcProvCertif = 'SAT970701NN3';
 
     final cadenaOriginal = '||1.1|$uuid|${DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(now)}|$rfcProvCertif|$selloEmisor|$noCertificadoSAT||';
     final qrString = 'https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx?id=$uuid&re=${invoiceData.issuerRfc}&rr=${invoiceData.receiverRfc}&tt=${invoiceData.total.toStringAsFixed(2)}&fe=${selloEmisor.substring(selloEmisor.length - 8)}';
