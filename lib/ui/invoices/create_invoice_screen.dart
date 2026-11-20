@@ -928,6 +928,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         series: _series,
         folio: _folioCtrl.text.trim().isNotEmpty ? _folioCtrl.text.trim() : '$_nextFolioNumber',
         emissionDate: DateTime.now(),
+        issuerCommercial: 'EJ Exterminadores',
         receiverBusinessName: businessName,
         receiverCommercialName: client.businessName,
         receiverRfc: rfc,
